@@ -1,0 +1,8 @@
+Ticket ID,Customer Name,Ticket Description,Date Submitted
+TCK-101,Sarah Jenkins,"I ordered a laptop 2 weeks ago and the tracking status still says 'Pending Shipment'. I need this for work urgently!",2026-08-10
+TCK-102,David Miller,"My credit card was billed $299 twice for invoice #8841. Please refund the duplicate charge immediately.",2026-08-10
+TCK-103,Alex Rivera,"How do I export my monthly user reports to PDF format? I can't find the export button in settings.",2026-08-11
+TCK-104,Elena Rostova,"The API is returning 500 internal server error when we call the POST /v1/checkout endpoint in production!",2026-08-11
+TCK-105,Marcus Vance,"I want to enquire about enterprise bulk discount pricing for 150 team seats.",2026-08-12
+TCK-106,Jessica Wu,"Your app crashed while I was saving my draft presentation and I lost 3 hours of work! Fix this now!",2026-08-12
+TCK-107,Brian Cooper,"Can you change my billing address from 123 Main St to 456 Oak Ave for next month's invoice?",2026-08-12

@@ -31,6 +31,9 @@ class TicketClassification(BaseModel):
     This is the core schema that defines exactly what data structure we want 
     the LLM to return. Pydantic will ensure the LLM's JSON matches this perfectly.
     """
+    summary: str = Field(
+        description="A concise 1-sentence summary of the customer's support ticket."
+    )
     category: IssueCategory = Field(
         description="The category of the customer's issue."
     )
@@ -47,3 +50,13 @@ class TicketClassification(BaseModel):
         ge=0.0, le=1.0, 
         description="Confidence score of the classification between 0.0 and 1.0."
     )
+    draft_response: str = Field(
+        description="A polite, empathetic, and professional draft response email/message to send to the customer."
+    )
+    key_action_items: list[str] = Field(
+        description="A bulleted list of 2-3 specific action items for the assigned internal support agent to resolve the issue."
+    )
+    requires_immediate_escalation: bool = Field(
+        description="Set to true if the ticket is High priority and sentiment is Angry or Frustrated, requiring urgent escalation."
+    )
+

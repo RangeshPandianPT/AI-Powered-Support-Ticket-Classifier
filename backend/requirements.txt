@@ -7,3 +7,9 @@ plotly
 sqlalchemy
 google-genai
 openpyxl
+fastapi
+uvicorn
+langgraph
+chromadb
+langchain
+langchain-openai

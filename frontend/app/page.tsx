@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { Send, Inbox, AlertTriangle, CheckCircle, Clock } from "lucide-react";
+import AnalyticsDashboard from "./components/AnalyticsDashboard";
 
 export default function Home() {
   const [ticketText, setTicketText] = useState("");
@@ -9,6 +10,7 @@ export default function Home() {
   const [result, setResult] = useState<any>(null);
   const [tickets, setTickets] = useState<any[]>([]);
   const [ingesting, setIngesting] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Fetch recent tickets
   useEffect(() => {
@@ -34,6 +36,7 @@ export default function Home() {
       });
       setResult(res.data);
       fetchTickets();
+      setRefreshTrigger(prev => prev + 1);
       setTicketText("");
     } catch (e) {
       console.error(e);
@@ -48,6 +51,7 @@ export default function Home() {
       await axios.post("http://127.0.0.1:8000/api/email/ingest");
       alert("Emails successfully ingested and processed by AI Agents!");
       fetchTickets();
+      setRefreshTrigger(prev => prev + 1);
     } catch (e) {
       console.error(e);
       alert("Failed to ingest emails.");
@@ -67,6 +71,8 @@ export default function Home() {
           {ingesting ? "Ingesting IMAP..." : "Simulate IMAP Ingestion"}
         </button>
       </div>
+
+      <AnalyticsDashboard refreshTrigger={refreshTrigger} />
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
         {/* Left Column - Input */}

@@ -13,3 +13,5 @@ langgraph
 chromadb
 langchain
 langchain-openai
+python-multipart
+pypdf

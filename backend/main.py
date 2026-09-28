@@ -107,6 +107,48 @@ def ingest_emails_endpoint(background_tasks: BackgroundTasks):
             
     return {"message": f"Processed {len(emails)} emails.", "details": results}
 
+from rag_kb import get_all_kb_docs, add_to_kb, delete_from_kb
+from fastapi import UploadFile, File, Form
+import io
+from pypdf import PdfReader
+
+@app.get("/api/kb")
+def get_kb_documents():
+    return get_all_kb_docs()
+
+@app.post("/api/kb")
+async def add_kb_document(
+    text: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None)
+):
+    if file:
+        content = await file.read()
+        extracted_text = ""
+        if file.filename.endswith(".pdf"):
+            try:
+                reader = PdfReader(io.BytesIO(content))
+                for page in reader.pages:
+                    extracted_text += page.extract_text() + "\n"
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {str(e)}")
+        else:
+            # Assume text file
+            extracted_text = content.decode("utf-8")
+        
+        doc_id = add_to_kb(extracted_text)
+        return {"message": "Document added", "id": doc_id}
+        
+    elif text:
+        doc_id = add_to_kb(text)
+        return {"message": "Document added", "id": doc_id}
+        
+    raise HTTPException(status_code=400, detail="Must provide either text or file")
+
+@app.delete("/api/kb/{doc_id}")
+def delete_kb_document(doc_id: str):
+    delete_from_kb(doc_id)
+    return {"message": "Document deleted successfully"}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

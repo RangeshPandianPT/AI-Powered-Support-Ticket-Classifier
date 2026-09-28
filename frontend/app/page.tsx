@@ -4,6 +4,8 @@ import axios from "axios";
 import { Send, Inbox, AlertTriangle, CheckCircle, Clock } from "lucide-react";
 import AnalyticsDashboard from "./components/AnalyticsDashboard";
 
+import KnowledgeBase from "./components/KnowledgeBase";
+
 export default function Home() {
   const [ticketText, setTicketText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -155,6 +157,8 @@ export default function Home() {
           {tickets.length === 0 && <p style={{ color: "#64748b" }}>No tickets found. Ingest emails or create one manually.</p>}
         </div>
       </div>
+      
+      <KnowledgeBase />
     </div>
   );
 }

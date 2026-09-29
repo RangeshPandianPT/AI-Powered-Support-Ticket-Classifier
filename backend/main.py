@@ -69,6 +69,13 @@ def classify_ticket_endpoint(req: TicketRequest):
 def list_ticketsEndpoint(status: str = "All", team: str = "All", priority: str = "All"):
     return get_all_tickets(status, team, priority)
 
+@app.get("/api/tickets/{ticket_id}")
+def get_ticket_endpoint(ticket_id: int):
+    ticket = db.get_ticket_by_id(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return ticket
+
 @app.get("/api/analytics")
 def analytics_endpoint():
     return get_analytics_summary()

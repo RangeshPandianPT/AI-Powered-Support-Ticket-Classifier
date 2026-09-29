@@ -116,6 +116,23 @@ def get_all_tickets(
             
         return results
 
+def get_ticket_by_id(ticket_id: int) -> Optional[Dict[str, Any]]:
+    """Retrieve a single ticket by its ID."""
+    init_db()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+            
+        item = dict(row)
+        try:
+            item['key_action_items'] = json.loads(item['key_action_items']) if item['key_action_items'] else []
+        except Exception:
+            item['key_action_items'] = []
+        return item
+
 def update_ticket_status(ticket_id: int, new_status: str) -> bool:
     """Update the resolution status of a ticket."""
     init_db()

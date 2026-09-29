@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { Send, Inbox, AlertTriangle, CheckCircle, Clock } from "lucide-react";
+import Link from "next/link";
 import AnalyticsDashboard from "./components/AnalyticsDashboard";
 
 import KnowledgeBase from "./components/KnowledgeBase";
@@ -134,7 +135,12 @@ export default function Home() {
       </div>
 
       <div style={{ marginTop: "3rem" }}>
-        <h2 style={{ marginBottom: "1.5rem" }}>Recent Database Tickets</h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+          <h2>Recent Database Tickets</h2>
+          <Link href="/tickets" className="btn btn-outline" style={{ textDecoration: "none" }}>
+            View All Tickets
+          </Link>
+        </div>
         <div className="grid" style={{ gridTemplateColumns: "1fr" }}>
           {tickets.map(t => (
             <div key={t.id} className="glass-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

@@ -66,12 +66,28 @@ def draft_node(state: AgentState):
     classification.draft_response = enhanced_draft
     return {"classification": classification, "draft_response": enhanced_draft, "status": "drafted"}
 
+import urllib.request
+import json
+
 def notify_node(state: AgentState):
     """Send webhook if escalation is required."""
     classification = state.get("classification")
     if classification and classification.requires_immediate_escalation:
-        # Simulate webhook
-        print(f"[SLACK WEBHOOK MOCK] URGENT TICKET: {classification.category.value} - {classification.summary}")
+        webhook_url = os.getenv("SLACK_WEBHOOK_URL")
+        
+        if webhook_url:
+            message = f"🚨 *URGENT TICKET ESCALATION* 🚨\n*Category:* {classification.category.value}\n*Summary:* {classification.summary}\n*Sentiment:* {classification.sentiment_score}/10"
+            try:
+                data = json.dumps({"text": message}).encode("utf-8")
+                req = urllib.request.Request(webhook_url, data=data, headers={"Content-Type": "application/json"})
+                urllib.request.urlopen(req)
+                print(f"[SLACK WEBHOOK] Sent urgent alert to Slack.")
+            except Exception as e:
+                print(f"[SLACK WEBHOOK] Failed to send alert: {e}")
+        else:
+            # Simulate webhook
+            print(f"[SLACK WEBHOOK MOCK] URGENT TICKET: {classification.category.value} - {classification.summary}")
+            
         return {"notification_sent": True, "status": "notified"}
     return {"notification_sent": False, "status": "completed"}
 

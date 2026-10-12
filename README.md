@@ -6,12 +6,16 @@ This platform automates the ingestion, classification, and drafting of responses
 
 ## 🌟 Key Features
 
-* **AI Ticket Classification**: Automatically categorizes tickets, assigns them to the correct internal team (e.g., IT, Sales, Logistics), and calculates priority based on the issue urgency and customer sentiment.
-* **Multi-Agent Workflow (LangGraph)**: Utilizes LangGraph to process tickets through a structured workflow, analyzing them with OpenAI or Gemini models.
-* **RAG-Enhanced Knowledge Base**: Upload PDF or text documents to the Knowledge Base to give the AI context. The AI generates highly accurate, context-aware draft responses for support agents.
-* **Email Ingestion Simulation**: Simulates fetching incoming customer emails via IMAP and processing them directly into the ticket pipeline.
-* **Ticket Management Dashboard**: A comprehensive Next.js frontend for agents to view incoming tickets, review AI-generated action items and draft responses, and mark tickets as resolved.
-* **Urgent Escalation System**: Automatically detects high-priority, frustrated customers and triggers an escalation alert (simulating a Slack webhook).
+* **Multi-Agent Workflow (LangGraph)**: Processes tickets through structured agents: Triage Agent ➡️ RAG Knowledge Retrieval ➡️ Response Drafter ➡️ Escalation Sentinel.
+* **Live Agent Execution Stepper**: Visualizes real-time execution steps, agent decisions, confidence scores, and retrieved policies in the UI.
+* **AI Ticket Classification & Triage**: Categorizes issues, routes to teams (IT, Sales, Logistics, Customer Success), and determines priority and emotional sentiment.
+* **RAG-Enhanced Knowledge Base**: Upload PDF or text policies to ChromaDB vector store; agent responses are automatically grounded in company guidelines.
+* **Interactive AI Response Studio**: Agents can edit draft responses, adjust tone with 1-click (Empathetic, Concise, Executive, Refund Credit), copy to clipboard, and simulate email reply dispatch.
+* **AI Support Copilot**: Dedicated side-drawer chat for support agents to query policies, churn risk, or draft internal team handover notes.
+* **Batch CSV Ingestion & Benchmarking**: Process bulk tickets from `sample_tickets.csv` or uploaded custom CSV files with live progress tracking.
+* **Ticket Operations Center (`/tickets`)**: Full-featured management view with real-time text search, status/team/priority filters, sorting, and inline resolution toggles.
+* **Urgent Escalation System**: Automatically triggers Slack webhook alerts for high-priority frustrated customers.
+* **Email Ingestion Simulation**: Real IMAP email polling with automated mock fallback.
 
 ## 🏗️ Architecture
 

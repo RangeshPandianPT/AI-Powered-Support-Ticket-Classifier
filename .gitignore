@@ -11,3 +11,4 @@ tickets.db
 .vscode/
 .idea/
 .DS_Store
+chroma_db/

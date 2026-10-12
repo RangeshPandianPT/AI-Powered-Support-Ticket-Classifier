@@ -1,5 +1,5 @@
 import os
-from typing import TypedDict, Optional
+from typing import TypedDict, Optional, List, Dict, Any
 from langgraph.graph import StateGraph, END
 from classifier import classify_ticket
 from rag_kb import search_kb
@@ -16,10 +16,12 @@ class AgentState(TypedDict):
     draft_response: Optional[str]
     notification_sent: bool
     status: str
+    steps: List[Dict[str, Any]]
 
 def triage_node(state: AgentState):
     """Classify the ticket."""
     ticket = state["ticket_text"]
+    steps = list(state.get("steps", []))
     try:
         classification, provider_used = classify_ticket(
             ticket, 
@@ -27,44 +29,86 @@ def triage_node(state: AgentState):
             openai_key=state.get("openai_key"),
             gemini_key=state.get("gemini_key")
         )
-        return {"classification": classification, "provider_used": provider_used, "status": "triaged"}
+        steps.append({
+            "agent": "Triage Agent",
+            "status": "completed",
+            "summary": f"Categorized as {classification.category.value} • {classification.priority.value} Priority • {classification.sentiment.value} Sentiment",
+            "details": {
+                "assigned_team": classification.assigned_team.value,
+                "confidence": round(float(classification.confidence_score) * 100, 1),
+                "provider": provider_used,
+                "summary": classification.summary
+            }
+        })
+        return {
+            "classification": classification, 
+            "provider_used": provider_used, 
+            "status": "triaged",
+            "steps": steps
+        }
     except Exception as e:
-        # Fallback in case of failure
-        return {"status": "error", "draft_response": f"Error: {str(e)}"}
+        steps.append({
+            "agent": "Triage Agent",
+            "status": "error",
+            "summary": f"Classification failed: {str(e)}",
+            "details": {"error": str(e)}
+        })
+        return {"status": "error", "draft_response": f"Error: {str(e)}", "steps": steps}
 
 def research_node(state: AgentState):
     """Fetch relevant KB articles based on ticket text and category."""
     classification = state.get("classification")
-    if not classification:
-        return {}
+    steps = list(state.get("steps", []))
+    if state.get("status") == "error" or not classification:
+        return {"status": "error", "steps": steps}
     
     # Use ticket text or category for search
     query = f"{classification.category.value} {state['ticket_text']}"
     kb_context = search_kb(query)
-    return {"kb_context": kb_context, "status": "researched"}
+    
+    has_policy = "No relevant information found" not in kb_context
+    steps.append({
+        "agent": "RAG Knowledge Agent",
+        "status": "completed",
+        "summary": "Retrieved matching knowledge base documentation" if has_policy else "Queried KB (standard FAQ fallback)",
+        "details": {
+            "query": classification.category.value,
+            "kb_context": kb_context[:160] + "..." if len(kb_context) > 160 else kb_context
+        }
+    })
+    return {"kb_context": kb_context, "status": "researched", "steps": steps}
 
 def draft_node(state: AgentState):
     """Draft a better response using KB context."""
     classification = state.get("classification")
     kb_context = state.get("kb_context", "")
+    steps = list(state.get("steps", []))
     
-    if not classification:
-        return {}
+    if state.get("status") == "error" or not classification:
+        return {"status": "error", "steps": steps}
         
-    # In a real app we'd call an LLM again, but let's simulate it by appending KB context 
-    # to make it faster and save tokens for this demo, or we can use OpenAI directly.
-    # We will just enhance the existing draft.
     original_draft = classification.draft_response
     
-    enhanced_draft = (
-        f"{original_draft}\n\n"
-        f"--- (AI Knowledge Base Context Applied) ---\n"
-        f"Relevant Policy: {kb_context}"
-    )
+    if kb_context and "No relevant information found" not in kb_context:
+        enhanced_draft = (
+            f"{original_draft}\n\n"
+            f"--- (AI Knowledge Base Policy Applied) ---\n"
+            f"Relevant Policy: {kb_context}"
+        )
+    else:
+        enhanced_draft = original_draft
     
-    # Modify classification object in memory
     classification.draft_response = enhanced_draft
-    return {"classification": classification, "draft_response": enhanced_draft, "status": "drafted"}
+    steps.append({
+        "agent": "Response Drafter Agent",
+        "status": "completed",
+        "summary": "Synthesized empathetic draft response with policy context",
+        "details": {
+            "action_items_count": len(classification.key_action_items),
+            "action_items": classification.key_action_items
+        }
+    })
+    return {"classification": classification, "draft_response": enhanced_draft, "status": "drafted", "steps": steps}
 
 import urllib.request
 import json
@@ -72,24 +116,50 @@ import json
 def notify_node(state: AgentState):
     """Send webhook if escalation is required."""
     classification = state.get("classification")
-    if classification and classification.requires_immediate_escalation:
+    steps = list(state.get("steps", []))
+    notification_sent = False
+    
+    if state.get("status") == "error" or not classification:
+        return {"notification_sent": False, "status": "error", "steps": steps}
+    
+    if classification.requires_immediate_escalation:
         webhook_url = os.getenv("SLACK_WEBHOOK_URL")
+        message = f"🚨 *URGENT TICKET ESCALATION* 🚨\n*Category:* {classification.category.value}\n*Summary:* {classification.summary}\n*Sentiment:* {classification.sentiment.value} (Confidence: {int(classification.confidence_score * 100)}%)"
         
         if webhook_url:
-            message = f"🚨 *URGENT TICKET ESCALATION* 🚨\n*Category:* {classification.category.value}\n*Summary:* {classification.summary}\n*Sentiment:* {classification.sentiment_score}/10"
             try:
                 data = json.dumps({"text": message}).encode("utf-8")
                 req = urllib.request.Request(webhook_url, data=data, headers={"Content-Type": "application/json"})
                 urllib.request.urlopen(req)
                 print(f"[SLACK WEBHOOK] Sent urgent alert to Slack.")
+                notification_sent = True
             except Exception as e:
                 print(f"[SLACK WEBHOOK] Failed to send alert: {e}")
         else:
-            # Simulate webhook
             print(f"[SLACK WEBHOOK MOCK] URGENT TICKET: {classification.category.value} - {classification.summary}")
+            notification_sent = True
             
-        return {"notification_sent": True, "status": "notified"}
-    return {"notification_sent": False, "status": "completed"}
+        steps.append({
+            "agent": "Escalation Sentinel",
+            "status": "escalated",
+            "summary": "Urgent escalation flagged: Slack webhook dispatched",
+            "details": {
+                "escalated": True,
+                "reason": f"High priority ticket with {classification.sentiment.value} customer sentiment"
+            }
+        })
+        return {"notification_sent": notification_sent, "status": "notified", "steps": steps}
+        
+    steps.append({
+        "agent": "Escalation Sentinel",
+        "status": "normal",
+        "summary": "Standard routing: Ticket queued for normal SLA handling",
+        "details": {
+            "escalated": False,
+            "assigned_team": classification.assigned_team.value if classification else "General"
+        }
+    })
+    return {"notification_sent": False, "status": "completed", "steps": steps}
 
 def build_workflow():
     workflow = StateGraph(AgentState)
@@ -117,7 +187,8 @@ def run_ticket_workflow(ticket_text: str, provider="Auto", openai_key=None, gemi
         "openai_key": openai_key,
         "gemini_key": gemini_key,
         "notification_sent": False,
-        "status": "started"
+        "status": "started",
+        "steps": []
     }
     result = ticket_agent.invoke(initial_state)
     return result

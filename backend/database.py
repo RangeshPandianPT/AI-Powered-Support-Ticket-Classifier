@@ -143,6 +143,16 @@ def update_ticket_status(ticket_id: int, new_status: str) -> bool:
         conn.commit()
         return row_count > 0
 
+def update_ticket_draft(ticket_id: int, new_draft: str) -> bool:
+    """Update the draft response of a ticket."""
+    init_db()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE tickets SET draft_response = ? WHERE id = ?", (new_draft, ticket_id))
+        row_count = cursor.rowcount
+        conn.commit()
+        return row_count > 0
+
 def delete_ticket(ticket_id: int) -> bool:
     """Delete a ticket from the database."""
     init_db()

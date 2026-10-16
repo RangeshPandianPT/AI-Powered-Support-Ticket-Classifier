@@ -9,7 +9,7 @@ import csv
 from database import get_all_tickets, save_ticket, update_ticket_status, delete_ticket, get_analytics_summary
 from langgraph_workflow import run_ticket_workflow
 from email_ingestion import check_new_emails
-from classifier import rewrite_draft_llm, copilot_chat_llm
+from classifier import rewrite_draft_llm, copilot_chat_llm, simulate_customer_reply_llm, reclassify_conversation_thread
 from rag_kb import get_all_kb_docs, add_to_kb, delete_from_kb, search_kb
 from pypdf import PdfReader
 import database as db
@@ -50,6 +50,15 @@ class CopilotRequest(BaseModel):
 class SendReplyRequest(BaseModel):
     reply_text: str
     customer_email: Optional[str] = None
+    mark_resolved: bool = True
+
+class MessageCreateRequest(BaseModel):
+    sender: str = "customer"
+    message_text: str
+    sentiment: Optional[str] = None
+
+class SimulateReplyRequest(BaseModel):
+    persona: str = "dynamic"
 
 @app.post("/api/tickets/classify")
 def classify_ticket_endpoint(req: TicketRequest):
@@ -146,16 +155,93 @@ def copilot_endpoint(ticket_id: int, req: CopilotRequest):
     )
     return {"reply": reply}
 
+@app.get("/api/tickets/{ticket_id}/messages")
+def get_ticket_messages_endpoint(ticket_id: int):
+    ticket = db.get_ticket_by_id(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    messages = db.get_ticket_messages(ticket_id)
+    return messages
+
+@app.post("/api/tickets/{ticket_id}/messages")
+def add_ticket_message_endpoint(ticket_id: int, req: MessageCreateRequest):
+    ticket = db.get_ticket_by_id(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    msg_id = db.add_ticket_message(ticket_id, req.sender, req.message_text, req.sentiment)
+    messages = db.get_ticket_messages(ticket_id)
+    return {"id": msg_id, "messages": messages}
+
+@app.post("/api/tickets/{ticket_id}/simulate-reply")
+def simulate_reply_endpoint(ticket_id: int, req: SimulateReplyRequest):
+    ticket = db.get_ticket_by_id(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    
+    existing_messages = db.get_ticket_messages(ticket_id)
+    simulated = simulate_customer_reply_llm(
+        ticket_context=ticket,
+        message_history=existing_messages,
+        persona=req.persona
+    )
+    
+    # Record customer reply into thread
+    db.add_ticket_message(
+        ticket_id=ticket_id,
+        sender="customer",
+        message_text=simulated["message"],
+        sentiment=simulated["sentiment"]
+    )
+    
+    # Re-evaluate thread sentiment and draft
+    updated_messages = db.get_ticket_messages(ticket_id)
+    triage_update = reclassify_conversation_thread(ticket, updated_messages)
+    
+    db.update_ticket_conversation(
+        ticket_id=ticket_id,
+        sentiment=triage_update["sentiment"],
+        draft_response=triage_update["draft_response"],
+        requires_immediate_escalation=triage_update["requires_immediate_escalation"],
+        status=triage_update["status"]
+    )
+    
+    updated_ticket = db.get_ticket_by_id(ticket_id)
+    return {
+        "simulated_reply": simulated,
+        "triage_update": triage_update,
+        "messages": updated_messages,
+        "ticket": updated_ticket
+    }
+
 @app.post("/api/tickets/{ticket_id}/reply")
 def send_reply_endpoint(ticket_id: int, req: SendReplyRequest):
     ticket = db.get_ticket_by_id(ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
+    
+    # Append outbound agent reply to the conversation thread
+    db.add_ticket_message(
+        ticket_id=ticket_id,
+        sender="agent",
+        message_text=req.reply_text,
+        sentiment="Helpful"
+    )
+    
+    # Update draft response in database
     db.update_ticket_draft(ticket_id, req.reply_text)
+    
+    if req.mark_resolved:
+        db.update_ticket_status(ticket_id, "Resolved")
+        
+    updated_ticket = db.get_ticket_by_id(ticket_id)
+    messages = db.get_ticket_messages(ticket_id)
+    
     return {
         "status": "sent",
         "message": f"Customer reply dispatched successfully for Ticket #{ticket_id}",
-        "recipient": req.customer_email or "customer@example.com"
+        "recipient": req.customer_email or "customer@example.com",
+        "ticket": updated_ticket,
+        "messages": messages
     }
 
 @app.delete("/api/tickets/{ticket_id}")

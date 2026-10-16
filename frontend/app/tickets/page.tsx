@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import Link from "next/link";
-import { Clock, ExternalLink, Search, Filter, AlertTriangle, CheckCircle, Trash2, ArrowLeft, RefreshCw } from "lucide-react";
+import { Clock, ExternalLink, Search, Filter, AlertTriangle, CheckCircle, Trash2, ArrowLeft, RefreshCw, MessageSquare } from "lucide-react";
 import Navbar from "../components/Navbar";
 
 export default function TicketsPage() {
@@ -217,6 +217,18 @@ export default function TicketsPage() {
                         <span className="badge" style={{ background: "rgba(255,255,255,0.06)", color: "#cbd5e1" }}>
                           {t.sentiment}
                         </span>
+                        <span className="badge" style={{ background: "rgba(59, 130, 246, 0.15)", color: "#93c5fd", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <MessageSquare size={11} /> {t.message_count || 1} msg{(t.message_count || 1) === 1 ? "" : "s"}
+                        </span>
+                        {t.is_sla_breached ? (
+                          <span className="sla-pill breached animate-pulse" style={{ fontSize: "0.7rem", padding: "0.2rem 0.5rem" }}>
+                            <AlertTriangle size={11} /> SLA Breached
+                          </span>
+                        ) : t.sla_remaining_minutes !== undefined && t.status === "Open" ? (
+                          <span className={`sla-pill ${t.sla_remaining_minutes < 120 ? 'warning' : 'normal'}`} style={{ fontSize: "0.7rem", padding: "0.2rem 0.5rem" }}>
+                            <Clock size={11} /> {t.sla_remaining_minutes > 0 ? `${Math.floor(t.sla_remaining_minutes / 60)}h ${t.sla_remaining_minutes % 60}m SLA` : 'Due'}
+                          </span>
+                        ) : null}
                         {t.requires_immediate_escalation === 1 && (
                           <span className="badge badge-danger">
                             <AlertTriangle size={12} /> Urgent

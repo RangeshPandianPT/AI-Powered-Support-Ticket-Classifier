@@ -10,7 +10,10 @@ This platform automates the ingestion, classification, and drafting of responses
 * **Live Agent Execution Stepper**: Visualizes real-time execution steps, agent decisions, confidence scores, and retrieved policies in the UI.
 * **AI Ticket Classification & Triage**: Categorizes issues, routes to teams (IT, Sales, Logistics, Customer Success), and determines priority and emotional sentiment.
 * **RAG-Enhanced Knowledge Base**: Upload PDF or text policies to ChromaDB vector store; agent responses are automatically grounded in company guidelines.
-* **Interactive AI Response Studio**: Agents can edit draft responses, adjust tone with 1-click (Empathetic, Concise, Executive, Refund Credit), copy to clipboard, and simulate email reply dispatch.
+* **Multi-Turn Conversation Threads**: Track complete back-and-forth message histories between customers and support agents with delivery timestamps, message counts, and sentiment tracking.
+* **Customer Reply Simulation Engine**: Simulate realistic customer follow-up reactions using LLM personas (Auto Dynamic Reaction, Solved/Thankful, Still Failing/Escalating, Clarification Question, or Custom Inbound Message) to test full support lifecycles.
+* **SLA Breach Monitoring & Countdown Timers**: Dynamic priority-based SLA tracking (4h High, 12h Medium, 24h Low) with real-time remaining countdown badges and breach indicators.
+* **Interactive AI Response Studio**: Agents can edit draft responses, adjust tone with 1-click (Empathetic, Concise, Executive, Refund Credit), copy to clipboard, and simulate email reply dispatch into the message thread.
 * **AI Support Copilot**: Dedicated side-drawer chat for support agents to query policies, churn risk, or draft internal team handover notes.
 * **Batch CSV Ingestion & Benchmarking**: Process bulk tickets from `sample_tickets.csv` or uploaded custom CSV files with live progress tracking.
 * **Ticket Operations Center (`/tickets`)**: Full-featured management view with real-time text search, status/team/priority filters, sorting, and inline resolution toggles.

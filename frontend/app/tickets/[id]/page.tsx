@@ -5,9 +5,19 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
   AlertTriangle, Clock, ArrowLeft, CheckCircle, Trash2, Send, 
-  Sparkles, Bot, Copy, Check, Save, MessageSquare, Loader2, RefreshCw 
+  Sparkles, Bot, Copy, Check, Save, MessageSquare, Loader2, RefreshCw,
+  User, ShieldCheck, HelpCircle, Flame, Smile, Frown, MessageCircle
 } from "lucide-react";
 import Navbar from "../../components/Navbar";
+
+interface MessageItem {
+  id?: number;
+  ticket_id?: number;
+  sender: "customer" | "agent";
+  message_text: string;
+  sentiment?: string;
+  created_at?: string;
+}
 
 export default function TicketDetail() {
   const params = useParams();
@@ -15,15 +25,24 @@ export default function TicketDetail() {
   const id = params.id;
 
   const [ticket, setTicket] = useState<any>(null);
+  const [messages, setMessages] = useState<MessageItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Response Editor State
   const [draftText, setDraftText] = useState("");
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isRewriting, setIsRewriting] = useState(false);
+  const [isSendingReply, setIsSendingReply] = useState(false);
   const [copied, setCopied] = useState(false);
   const [replySentSuccess, setReplySentSuccess] = useState<string | null>(null);
   const [checkedActions, setCheckedActions] = useState<Record<number, boolean>>({});
+
+  // Simulation State
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [activePersona, setActivePersona] = useState<string | null>(null);
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customInputText, setCustomInputText] = useState("");
+  const [isSendingCustomMsg, setIsSendingCustomMsg] = useState(false);
 
   // Copilot State
   const [copilotOpen, setCopilotOpen] = useState(false);
@@ -33,18 +52,22 @@ export default function TicketDetail() {
 
   useEffect(() => {
     if (id) {
-      fetchTicket();
+      fetchTicketData();
     }
   }, [id]);
 
-  const fetchTicket = async () => {
+  const fetchTicketData = async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`http://127.0.0.1:8000/api/tickets/${id}`);
-      setTicket(res.data);
-      setDraftText(res.data.draft_response || "");
+      const [ticketRes, msgRes] = await Promise.all([
+        axios.get(`http://127.0.0.1:8000/api/tickets/${id}`),
+        axios.get(`http://127.0.0.1:8000/api/tickets/${id}/messages`)
+      ]);
+      setTicket(ticketRes.data);
+      setDraftText(ticketRes.data.draft_response || "");
+      setMessages(msgRes.data || []);
     } catch (e) {
-      console.error("Failed to fetch ticket", e);
+      console.error("Failed to fetch ticket data", e);
     } finally {
       setLoading(false);
     }
@@ -53,7 +76,7 @@ export default function TicketDetail() {
   const handleUpdateStatus = async (newStatus: string) => {
     try {
       await axios.put(`http://127.0.0.1:8000/api/tickets/${id}/status`, { status: newStatus });
-      setTicket({ ...ticket, status: newStatus });
+      setTicket((prev: any) => ({ ...prev, status: newStatus }));
     } catch (e) {
       console.error("Failed to update status", e);
     }
@@ -63,7 +86,7 @@ export default function TicketDetail() {
     setIsSavingDraft(true);
     try {
       await axios.put(`http://127.0.0.1:8000/api/tickets/${id}/draft`, { draft_response: draftText });
-      setTicket({ ...ticket, draft_response: draftText });
+      setTicket((prev: any) => ({ ...prev, draft_response: draftText }));
       alert("Draft response updated successfully!");
     } catch (e) {
       console.error("Failed to save draft", e);
@@ -97,22 +120,80 @@ export default function TicketDetail() {
   };
 
   const handleSendReply = async () => {
-    if (!confirm("Simulate dispatching this email response to the customer?")) return;
+    if (!draftText.trim()) return;
+    setIsSendingReply(true);
     try {
       const res = await axios.post(`http://127.0.0.1:8000/api/tickets/${id}/reply`, {
-        reply_text: draftText
+        reply_text: draftText,
+        mark_resolved: false
       });
       setReplySentSuccess(res.data.message);
-      // Auto-resolve ticket
-      handleUpdateStatus("Resolved");
+      if (res.data.messages) {
+        setMessages(res.data.messages);
+      }
+      if (res.data.ticket) {
+        setTicket(res.data.ticket);
+      }
+      setDraftText("");
+      setTimeout(() => setReplySentSuccess(null), 5000);
     } catch (e) {
       console.error("Failed to send reply", e);
       alert("Failed to dispatch reply.");
+    } finally {
+      setIsSendingReply(false);
+    }
+  };
+
+  // Simulate customer response
+  const handleSimulateCustomerReply = async (persona: string) => {
+    setIsSimulating(true);
+    setActivePersona(persona);
+    try {
+      const res = await axios.post(`http://127.0.0.1:8000/api/tickets/${id}/simulate-reply`, {
+        persona
+      });
+      if (res.data.messages) {
+        setMessages(res.data.messages);
+      }
+      if (res.data.ticket) {
+        setTicket(res.data.ticket);
+      }
+      if (res.data.triage_update?.draft_response) {
+        setDraftText(res.data.triage_update.draft_response);
+      }
+    } catch (e) {
+      console.error("Failed to simulate reply", e);
+      alert("Simulation failed. Ensure backend server is running.");
+    } finally {
+      setIsSimulating(false);
+      setActivePersona(null);
+    }
+  };
+
+  // Send manual custom customer message
+  const handleSendCustomMessage = async () => {
+    if (!customInputText.trim()) return;
+    setIsSendingCustomMsg(true);
+    try {
+      const res = await axios.post(`http://127.0.0.1:8000/api/tickets/${id}/messages`, {
+        sender: "customer",
+        message_text: customInputText.trim(),
+        sentiment: "Neutral"
+      });
+      if (res.data.messages) {
+        setMessages(res.data.messages);
+      }
+      setCustomInputText("");
+      setShowCustomInput(false);
+    } catch (e) {
+      console.error("Failed to send custom message", e);
+    } finally {
+      setIsSendingCustomMsg(false);
     }
   };
 
   const handleDelete = async () => {
-    if (confirm("Are you sure you want to permanently delete this ticket?")) {
+    if (confirm("Are you sure you want to permanently delete this ticket and its message history?")) {
       try {
         await axios.delete(`http://127.0.0.1:8000/api/tickets/${id}`);
         router.push("/tickets");
@@ -157,7 +238,7 @@ export default function TicketDetail() {
       <>
         <Navbar />
         <div className="container" style={{ textAlign: "center", padding: "4rem", color: "#94a3b8" }}>
-          Loading ticket intelligence...
+          Loading ticket intelligence & conversation history...
         </div>
       </>
     );
@@ -173,6 +254,16 @@ export default function TicketDetail() {
       </>
     );
   }
+
+  const renderSentimentIcon = (sentiment?: string) => {
+    const s = (sentiment || "").toLowerCase();
+    if (s.includes("happy") || s.includes("resolved") || s.includes("satisfied")) {
+      return <Smile size={14} color="#34d399" />;
+    } else if (s.includes("angry") || s.includes("frustrated")) {
+      return <Flame size={14} color="#f87171" />;
+    }
+    return <MessageCircle size={14} color="#94a3b8" />;
+  };
 
   return (
     <>
@@ -194,6 +285,21 @@ export default function TicketDetail() {
                 {ticket.status}
               </span>
               <span className="badge badge-neutral">{ticket.assigned_team}</span>
+
+              {/* SLA Target Badge */}
+              {ticket.is_sla_breached ? (
+                <span className="sla-pill breached animate-pulse">
+                  <AlertTriangle size={13} /> SLA Breached ({ticket.sla_target_hours || 4}h target)
+                </span>
+              ) : ticket.sla_remaining_minutes !== undefined && ticket.status === "Open" ? (
+                <span className={`sla-pill ${ticket.sla_remaining_minutes < 120 ? 'warning' : 'normal'}`}>
+                  <Clock size={13} /> 
+                  {ticket.sla_remaining_minutes > 0 ? (
+                    `${Math.floor(ticket.sla_remaining_minutes / 60)}h ${ticket.sla_remaining_minutes % 60}m SLA remaining`
+                  ) : "SLA Due"}
+                </span>
+              ) : null}
+
               {ticket.requires_immediate_escalation === 1 && (
                 <span className="badge badge-danger">
                   <AlertTriangle size={12} /> Urgent Escalation
@@ -201,7 +307,7 @@ export default function TicketDetail() {
               )}
             </div>
             <p style={{ color: "#94a3b8", fontSize: "0.85rem", marginTop: "0.25rem" }}>
-              Ingested on {new Date(ticket.created_at).toLocaleString()} via {ticket.provider_used || "AutoDesk AI"}
+              Ingested on {new Date(ticket.created_at).toLocaleString()} via {ticket.provider_used || "AutoDesk AI"} • {messages.length} message{messages.length === 1 ? "" : "s"} in thread
             </p>
           </div>
 
@@ -233,7 +339,7 @@ export default function TicketDetail() {
             <button 
               className="btn btn-danger" 
               onClick={handleDelete}
-              title="Delete this ticket"
+              title="Delete this ticket and message history"
             >
               <Trash2 size={16} /> Delete
             </button>
@@ -255,37 +361,169 @@ export default function TicketDetail() {
           }}>
             <CheckCircle size={20} />
             <div>
-              <strong>Reply Sent!</strong>
-              <div style={{ fontSize: "0.85rem", color: "#a7f3d0" }}>{replySentSuccess} Ticket marked as Resolved.</div>
+              <strong>Reply Delivered!</strong>
+              <div style={{ fontSize: "0.85rem", color: "#a7f3d0" }}>{replySentSuccess} Message added to timeline.</div>
             </div>
           </div>
         )}
 
         {/* Main 2-Column Grid */}
         <div style={{ display: "grid", gridTemplateColumns: copilotOpen ? "1.8fr 1.2fr" : "1.8fr 1.2fr", gap: "2rem" }}>
-          {/* Left Column: Customer Message + Response Editor */}
+          
+          {/* Left Column: Multi-Turn Conversation Thread & Response Studio */}
           <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
-            {/* Customer Message */}
+            
+            {/* Conversation Timeline Card */}
             <div className="glass-card">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem" }}>
-                <h2 style={{ fontSize: "1.15rem", fontWeight: 700, color: "#fff" }}>Customer Inbound Message</h2>
-                <span className="badge badge-neutral" style={{ fontSize: "0.75rem" }}>Original Raw Text</span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                <div>
+                  <h2 style={{ fontSize: "1.15rem", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <MessageSquare size={18} color="#38bdf8" />
+                    <span>Conversation Thread</span>
+                  </h2>
+                  <p style={{ fontSize: "0.8rem", color: "#94a3b8" }}>
+                    Multi-turn interaction between customer and support agents
+                  </p>
+                </div>
+                <span className="badge badge-neutral" style={{ fontSize: "0.75rem" }}>
+                  {messages.length} message{messages.length === 1 ? "" : "s"}
+                </span>
               </div>
+
+              {/* Message List */}
+              <div className="msg-thread" style={{ marginBottom: "1.5rem" }}>
+                {messages.map((m, index) => {
+                  const isCustomer = m.sender === "customer";
+                  return (
+                    <div key={m.id || index} className={`msg-row ${isCustomer ? "customer" : "agent"}`}>
+                      <div className={`msg-avatar ${isCustomer ? "customer" : "agent"}`}>
+                        {isCustomer ? <User size={18} /> : <ShieldCheck size={18} />}
+                      </div>
+
+                      <div className={`msg-bubble ${isCustomer ? "customer" : "agent"}`}>
+                        <div className="msg-header" style={{ justifyContent: isCustomer ? "flex-start" : "flex-end" }}>
+                          <strong>{isCustomer ? "Customer" : "Support Agent (You)"}</strong>
+                          <span>•</span>
+                          <span>{m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now"}</span>
+                          {isCustomer && m.sentiment && (
+                            <span className="badge" style={{ 
+                              fontSize: "0.7rem", 
+                              padding: "0.15rem 0.45rem", 
+                              display: "inline-flex", 
+                              alignItems: "center", 
+                              gap: "0.25rem",
+                              background: m.sentiment === "Happy" ? "rgba(16, 185, 129, 0.2)" : m.sentiment === "Frustrated" || m.sentiment === "Angry" ? "rgba(239, 68, 68, 0.2)" : "rgba(255, 255, 255, 0.08)",
+                              color: m.sentiment === "Happy" ? "#6ee7b7" : m.sentiment === "Frustrated" || m.sentiment === "Angry" ? "#fca5a5" : "#cbd5e1"
+                            }}>
+                              {renderSentimentIcon(m.sentiment)}
+                              {m.sentiment}
+                            </span>
+                          )}
+                          {!isCustomer && (
+                            <span style={{ fontSize: "0.7rem", color: "#a5b4fc", display: "inline-flex", alignItems: "center", gap: 3 }}>
+                              <Check size={11} /> Delivered
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ whiteSpace: "pre-wrap", color: isCustomer ? "#e2e8f0" : "#f8fafc" }}>
+                          {m.message_text}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Customer Reply Simulator Bar */}
               <div style={{ 
-                background: "rgba(0, 0, 0, 0.35)", 
-                padding: "1.25rem", 
-                borderRadius: "10px", 
-                fontSize: "0.95rem", 
-                whiteSpace: "pre-wrap",
-                lineHeight: 1.6,
-                color: "#e2e8f0",
-                border: "1px solid rgba(255, 255, 255, 0.05)"
+                background: "rgba(0, 0, 0, 0.4)", 
+                border: "1px dashed rgba(255, 255, 255, 0.15)", 
+                borderRadius: "12px", 
+                padding: "1rem 1.25rem" 
               }}>
-                {ticket.ticket_text}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                  <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#cbd5e1", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <Sparkles size={15} color="#38bdf8" />
+                    <span>Simulate Customer Reaction & Follow-up:</span>
+                  </div>
+                  {isSimulating && (
+                    <span style={{ fontSize: "0.8rem", color: "#38bdf8", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <Loader2 size={13} className="animate-spin" /> Customer thinking...
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: showCustomInput ? "0.75rem" : 0 }}>
+                  <button 
+                    className="filter-pill"
+                    onClick={() => handleSimulateCustomerReply("dynamic")}
+                    disabled={isSimulating}
+                    style={{ fontSize: "0.78rem", background: activePersona === "dynamic" ? "rgba(59, 130, 246, 0.3)" : undefined }}
+                    title="AI evaluates the agent's latest reply and simulates a realistic customer follow-up"
+                  >
+                    ⚡ Auto Dynamic Reaction
+                  </button>
+                  <button 
+                    className="filter-pill"
+                    onClick={() => handleSimulateCustomerReply("satisfied")}
+                    disabled={isSimulating}
+                    style={{ fontSize: "0.78rem", background: activePersona === "satisfied" ? "rgba(16, 185, 129, 0.3)" : undefined }}
+                    title="Simulate customer confirming issue is solved and expressing gratitude"
+                  >
+                    😊 Solved / Thankful
+                  </button>
+                  <button 
+                    className="filter-pill"
+                    onClick={() => handleSimulateCustomerReply("frustrated")}
+                    disabled={isSimulating}
+                    style={{ fontSize: "0.78rem", background: activePersona === "frustrated" ? "rgba(239, 68, 68, 0.3)" : undefined }}
+                    title="Simulate customer stating it still failed and demanding immediate escalation"
+                  >
+                    😤 Still Failing / Escalate
+                  </button>
+                  <button 
+                    className="filter-pill"
+                    onClick={() => handleSimulateCustomerReply("inquiring")}
+                    disabled={isSimulating}
+                    style={{ fontSize: "0.78rem", background: activePersona === "inquiring" ? "rgba(245, 158, 11, 0.3)" : undefined }}
+                    title="Simulate customer asking a logical follow-up question"
+                  >
+                    ❓ Clarification Question
+                  </button>
+                  <button 
+                    className="filter-pill"
+                    onClick={() => setShowCustomInput(!showCustomInput)}
+                    style={{ fontSize: "0.78rem" }}
+                  >
+                    ✍️ {showCustomInput ? "Cancel Custom" : "Custom Reply"}
+                  </button>
+                </div>
+
+                {/* Custom manual message input */}
+                {showCustomInput && (
+                  <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+                    <input 
+                      type="text"
+                      className="input"
+                      placeholder="Type a custom customer response..."
+                      value={customInputText}
+                      onChange={(e) => setCustomInputText(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSendCustomMessage()}
+                      style={{ margin: 0, padding: "0.5rem 0.75rem", fontSize: "0.85rem" }}
+                    />
+                    <button 
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleSendCustomMessage}
+                      disabled={isSendingCustomMsg || !customInputText.trim()}
+                    >
+                      <Send size={14} /> Send
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Interactive Response Editor */}
+            {/* Interactive Response Studio */}
             <div className="glass-card">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem", flexWrap: "wrap", gap: "0.5rem" }}>
                 <div>
@@ -294,7 +532,7 @@ export default function TicketDetail() {
                     <span>AI Response Studio</span>
                   </h2>
                   <p style={{ fontSize: "0.8rem", color: "#94a3b8" }}>
-                    Review, tone-shift, or edit the AI draft before dispatching to customer
+                    Review, tone-shift, or edit the AI draft before dispatching to the customer
                   </p>
                 </div>
 
@@ -370,11 +608,11 @@ export default function TicketDetail() {
               {/* Textarea Editor */}
               <textarea
                 className="textarea"
-                rows={9}
+                rows={8}
                 value={draftText}
                 onChange={(e) => setDraftText(e.target.value)}
                 style={{ lineHeight: 1.55, fontSize: "0.92rem", marginBottom: "1rem" }}
-                placeholder="Draft response will appear here..."
+                placeholder="Draft response will appear here... you can edit directly or apply quick tone adjustments."
               ></textarea>
 
               {/* Dispatch Action */}
@@ -385,9 +623,10 @@ export default function TicketDetail() {
                 <button 
                   className="btn btn-primary" 
                   onClick={handleSendReply}
-                  disabled={!draftText.trim()}
+                  disabled={!draftText.trim() || isSendingReply}
                 >
-                  <Send size={16} /> Simulate Send Email Reply
+                  {isSendingReply ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                  <span>Simulate Send Email Reply</span>
                 </button>
               </div>
             </div>
@@ -395,6 +634,7 @@ export default function TicketDetail() {
 
           {/* Right Column: AI Triage Metadata + Copilot */}
           <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
+            
             {/* AI Triage Card */}
             <div className="glass-card" style={{ 
               border: ticket.requires_immediate_escalation === 1 ? "1px solid #ef4444" : undefined 
@@ -445,7 +685,10 @@ export default function TicketDetail() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
                   <div>
                     <div style={{ fontSize: "0.78rem", color: "#94a3b8" }}>User Sentiment</div>
-                    <div style={{ fontWeight: 600, color: "#e2e8f0", marginTop: "0.25rem" }}>{ticket.sentiment}</div>
+                    <div style={{ fontWeight: 600, color: "#e2e8f0", marginTop: "0.25rem", display: "flex", alignItems: "center", gap: 5 }}>
+                      {renderSentimentIcon(ticket.sentiment)}
+                      {ticket.sentiment}
+                    </div>
                   </div>
                   <div>
                     <div style={{ fontSize: "0.78rem", color: "#94a3b8" }}>AI Confidence</div>

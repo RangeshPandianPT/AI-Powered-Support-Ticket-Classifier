@@ -115,6 +115,65 @@ def test_api_endpoints():
     assert "successful" in batch_data
     assert batch_data["total_rows"] > 0
 
+def test_conversation_threads_and_simulation():
+    # 1. Create a ticket
+    cls = TicketClassification(
+        summary="Customer unable to access premium API endpoint",
+        category=IssueCategory.TECHNICAL_SUPPORT,
+        assigned_team=AssignedTeam.IT,
+        priority=IssuePriority.HIGH,
+        sentiment=UserSentiment.FRUSTRATED,
+        confidence_score=0.92,
+        draft_response="Please try regenerating your API credentials in settings.",
+        key_action_items=["Verify account permissions", "Check API rate limit logs"],
+        requires_immediate_escalation=True
+    )
+    ticket_id = db.save_ticket("I am getting 403 Forbidden on the premium API endpoint!", cls)
+    assert ticket_id > 0
+
+    # 2. Verify SLA metadata
+    t = db.get_ticket_by_id(ticket_id)
+    assert t is not None
+    assert t["sla_target_hours"] == 4
+    assert "sla_deadline" in t
+    assert "sla_remaining_minutes" in t
+    assert t["message_count"] >= 1
+
+    # 3. Verify initial message was seeded
+    messages = db.get_ticket_messages(ticket_id)
+    assert len(messages) >= 1
+    assert messages[0]["sender"] == "customer"
+    assert "403 Forbidden" in messages[0]["message_text"]
+
+    # 4. Test agent reply via API
+    res = client.post(f"/api/tickets/{ticket_id}/reply", json={
+        "reply_text": "Here is a regenerated test key to unblock you immediately.",
+        "mark_resolved": False
+    })
+    assert res.status_code == 200
+    reply_data = res.json()
+    assert len(reply_data["messages"]) == 2
+    assert reply_data["messages"][1]["sender"] == "agent"
+
+    # 5. Test simulated customer reply via API (satisfied persona)
+    res = client.post(f"/api/tickets/{ticket_id}/simulate-reply", json={
+        "persona": "satisfied"
+    })
+    assert res.status_code == 200
+    sim_data = res.json()
+    assert sim_data["simulated_reply"]["sentiment"] == "Happy"
+    assert len(sim_data["messages"]) == 3
+    assert sim_data["ticket"]["status"] == "Resolved"
+
+    # 6. Test manual message append
+    res = client.post(f"/api/tickets/{ticket_id}/messages", json={
+        "sender": "customer",
+        "message_text": "One quick question, does this key expire in 30 days?",
+        "sentiment": "Neutral"
+    })
+    assert res.status_code == 200
+    assert len(res.json()["messages"]) == 4
+
 if __name__ == "__main__":
     test_database_crud()
     print("Database CRUD test passed!")
@@ -124,4 +183,7 @@ if __name__ == "__main__":
     print("Classifier rewrite and copilot test passed!")
     test_api_endpoints()
     print("API endpoints test passed!")
+    test_conversation_threads_and_simulation()
+    print("Conversation threads & customer simulation tests passed!")
     print("\nALL BACKEND TESTS PASSED!")
+

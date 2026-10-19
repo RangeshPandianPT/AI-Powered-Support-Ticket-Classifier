@@ -13,6 +13,7 @@ from classifier import rewrite_draft_llm, copilot_chat_llm, simulate_customer_re
 from rag_kb import get_all_kb_docs, add_to_kb, delete_from_kb, search_kb
 from pypdf import PdfReader
 import database as db
+import collaboration as collab
 
 app = FastAPI(title="AI Support Intelligence API")
 
@@ -25,8 +26,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize DB
+# Initialize DB and collaboration tables
 db.init_db()
+collab.init_collaboration_db()
 
 class TicketRequest(BaseModel):
     ticket_text: str
@@ -36,6 +38,7 @@ class TicketRequest(BaseModel):
 
 class StatusUpdate(BaseModel):
     status: str
+    actor_name: str = "Agent"
 
 class DraftUpdate(BaseModel):
     draft_response: str
@@ -60,6 +63,19 @@ class MessageCreateRequest(BaseModel):
 class SimulateReplyRequest(BaseModel):
     persona: str = "dynamic"
 
+class AssignTicketRequest(BaseModel):
+    assignee_name: str
+    assignee_email: Optional[str] = None
+    actor_name: str = "Support Lead"
+
+class InternalNoteCreateRequest(BaseModel):
+    author_name: str
+    note_text: str
+    author_role: str = "Support Agent"
+    note_type: str = "internal"
+    tags: Optional[List[str]] = None
+    is_pinned: bool = False
+
 @app.post("/api/tickets/classify")
 def classify_ticket_endpoint(req: TicketRequest):
     try:
@@ -82,6 +98,14 @@ def classify_ticket_endpoint(req: TicketRequest):
             classification=classification, 
             provider_used=result["provider_used"], 
             status="Open"
+        )
+
+        collab.log_audit_event(
+            ticket_id=db_id,
+            action_type="CREATED",
+            actor_name="LangGraph Triage Agent",
+            actor_role="AI System",
+            details=f"Ticket ingested and categorized as {classification.category.value} ({classification.priority.value} Priority)"
         )
         
         return {
@@ -117,7 +141,17 @@ def analytics_endpoint():
 
 @app.put("/api/tickets/{ticket_id}/status")
 def update_status_endpoint(ticket_id: int, req: StatusUpdate):
+    prev = db.get_ticket_by_id(ticket_id)
+    old_status = prev.get("status") if prev else "Unknown"
     update_ticket_status(ticket_id, req.status)
+    collab.log_audit_event(
+        ticket_id=ticket_id,
+        action_type="STATUS_CHANGE",
+        actor_name=req.actor_name,
+        details=f"Ticket status changed from '{old_status}' to '{req.status}'",
+        old_value=old_status,
+        new_value=req.status
+    )
     return {"message": "Status updated successfully"}
 
 @app.put("/api/tickets/{ticket_id}/draft")
@@ -205,6 +239,13 @@ def simulate_reply_endpoint(ticket_id: int, req: SimulateReplyRequest):
         status=triage_update["status"]
     )
     
+    collab.log_audit_event(
+        ticket_id=ticket_id,
+        action_type="CUSTOMER_REPLY",
+        actor_name="Customer",
+        details=f"Inbound message received via {req.persona} simulation"
+    )
+
     updated_ticket = db.get_ticket_by_id(ticket_id)
     return {
         "simulated_reply": simulated,
@@ -232,6 +273,13 @@ def send_reply_endpoint(ticket_id: int, req: SendReplyRequest):
     
     if req.mark_resolved:
         db.update_ticket_status(ticket_id, "Resolved")
+
+    collab.log_audit_event(
+        ticket_id=ticket_id,
+        action_type="DRAFT_SENT",
+        actor_name="Support Agent",
+        details=f"Outbound reply dispatched to customer ({'Marked Resolved' if req.mark_resolved else 'Kept In Progress'})"
+    )
         
     updated_ticket = db.get_ticket_by_id(ticket_id)
     messages = db.get_ticket_messages(ticket_id)
@@ -248,6 +296,93 @@ def send_reply_endpoint(ticket_id: int, req: SendReplyRequest):
 def delete_ticket_endpoint(ticket_id: int):
     delete_ticket(ticket_id)
     return {"message": "Ticket deleted successfully"}
+
+# ==========================================
+# Team Collaboration & Internal Notes API
+# ==========================================
+
+@app.get("/api/team/workload")
+def get_team_workload_endpoint():
+    return collab.get_team_workload_summary()
+
+@app.get("/api/team/members")
+def get_team_members_endpoint():
+    return collab.get_team_members()
+
+@app.put("/api/tickets/{ticket_id}/assign")
+def assign_ticket_endpoint(ticket_id: int, req: AssignTicketRequest):
+    ticket = db.get_ticket_by_id(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    result = collab.assign_ticket_to_agent(
+        ticket_id=ticket_id,
+        assignee_name=req.assignee_name,
+        assignee_email=req.assignee_email,
+        actor_name=req.actor_name
+    )
+    return result
+
+@app.post("/api/tickets/{ticket_id}/auto-assign")
+def auto_assign_ticket_endpoint(ticket_id: int):
+    try:
+        return collab.auto_assign_ticket_ai(ticket_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/tickets/{ticket_id}/notes")
+def get_internal_notes_endpoint(ticket_id: int):
+    ticket = db.get_ticket_by_id(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return collab.get_internal_notes(ticket_id)
+
+@app.post("/api/tickets/{ticket_id}/notes")
+def add_internal_note_endpoint(ticket_id: int, req: InternalNoteCreateRequest):
+    ticket = db.get_ticket_by_id(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    note = collab.add_internal_note(
+        ticket_id=ticket_id,
+        author_name=req.author_name,
+        author_role=req.author_role,
+        note_text=req.note_text,
+        note_type=req.note_type,
+        tags=req.tags,
+        is_pinned=req.is_pinned
+    )
+    return note
+
+@app.delete("/api/tickets/notes/{note_id}")
+def delete_internal_note_endpoint(note_id: int):
+    success = collab.delete_internal_note(note_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return {"message": "Internal note deleted successfully"}
+
+@app.post("/api/tickets/notes/{note_id}/pin")
+def toggle_pin_note_endpoint(note_id: int):
+    new_pinned = collab.toggle_pin_internal_note(note_id)
+    if new_pinned is None:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return {"message": "Pin status updated", "is_pinned": new_pinned}
+
+@app.post("/api/tickets/{ticket_id}/generate-handover")
+def generate_handover_endpoint(ticket_id: int):
+    try:
+        return collab.generate_ai_shift_handover(ticket_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/tickets/{ticket_id}/audit-logs")
+def get_audit_logs_endpoint(ticket_id: int):
+    ticket = db.get_ticket_by_id(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return collab.get_ticket_audit_logs(ticket_id)
 
 @app.post("/api/email/ingest")
 def ingest_emails_endpoint(background_tasks: BackgroundTasks):

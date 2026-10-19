@@ -16,7 +16,11 @@ This platform automates the ingestion, classification, and drafting of responses
 * **Interactive AI Response Studio**: Agents can edit draft responses, adjust tone with 1-click (Empathetic, Concise, Executive, Refund Credit), copy to clipboard, and simulate email reply dispatch into the message thread.
 * **AI Support Copilot**: Dedicated side-drawer chat for support agents to query policies, churn risk, or draft internal team handover notes.
 * **Batch CSV Ingestion & Benchmarking**: Process bulk tickets from `sample_tickets.csv` or uploaded custom CSV files with live progress tracking.
-* **Ticket Operations Center (`/tickets`)**: Full-featured management view with real-time text search, status/team/priority filters, sorting, and inline resolution toggles.
+* **Private Internal Staff Notes**: Confidential agent-only notes, call logs, escalation memos, custom tags, and pin-to-top highlighting completely shielded from customer view.
+* **AI Shift Handover Briefing Generator**: 1-click LLM synthesis that analyzes full conversation histories and automatically drafts structured shift-transition handover notes for oncoming agents.
+* **Immutable Audit Trail & Timeline**: Chronological lifecycle event tracking covering state transitions, reassignments, note updates, and reply dispatches with visual diff chips.
+* **Intelligent Agent Routing & AI Auto-Assignment**: Automatic skill- and workload-balanced routing engine across IT, Billing, Customer Success, and Executive Escalations.
+* **Team Workload & Capacity Center**: Real-time slide-out dashboard detailing active ticket counts per agent, capacity progress bars, online shift status, and quick filtering.
 * **Urgent Escalation System**: Automatically triggers Slack webhook alerts for high-priority frustrated customers.
 * **Email Ingestion Simulation**: Real IMAP email polling with automated mock fallback.
 

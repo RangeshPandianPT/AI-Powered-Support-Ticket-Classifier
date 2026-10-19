@@ -2,8 +2,9 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import Link from "next/link";
-import { Clock, ExternalLink, Search, Filter, AlertTriangle, CheckCircle, Trash2, ArrowLeft, RefreshCw, MessageSquare } from "lucide-react";
+import { Clock, ExternalLink, Search, Filter, AlertTriangle, CheckCircle, Trash2, ArrowLeft, RefreshCw, MessageSquare, UserCheck, Users } from "lucide-react";
 import Navbar from "../components/Navbar";
+import TeamWorkloadDrawer from "../components/TeamWorkloadDrawer";
 
 export default function TicketsPage() {
   const [tickets, setTickets] = useState<any[]>([]);
@@ -13,6 +14,7 @@ export default function TicketsPage() {
   const [teamFilter, setTeamFilter] = useState("All");
   const [priorityFilter, setPriorityFilter] = useState("All");
   const [sortBy, setSortBy] = useState("newest");
+  const [workloadDrawerOpen, setWorkloadDrawerOpen] = useState(false);
 
   const fetchTickets = async () => {
     setLoading(true);
@@ -96,9 +98,19 @@ export default function TicketsPage() {
             </p>
           </div>
 
-          <button className="btn btn-secondary" onClick={fetchTickets}>
-            <RefreshCw size={16} /> Refresh
-          </button>
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+            <button 
+              id="btn-operations-team-workload"
+              className="btn btn-secondary" 
+              onClick={() => setWorkloadDrawerOpen(true)}
+              title="View team workload distribution and staffing capacity"
+            >
+              <Users size={16} /> Team Workload
+            </button>
+            <button className="btn btn-secondary" onClick={fetchTickets}>
+              <RefreshCw size={16} /> Refresh
+            </button>
+          </div>
         </div>
 
         {/* Quick Stats Banner */}
@@ -220,6 +232,15 @@ export default function TicketsPage() {
                         <span className="badge" style={{ background: "rgba(59, 130, 246, 0.15)", color: "#93c5fd", display: "inline-flex", alignItems: "center", gap: 4 }}>
                           <MessageSquare size={11} /> {t.message_count || 1} msg{(t.message_count || 1) === 1 ? "" : "s"}
                         </span>
+                        {t.assignee_name && t.assignee_name !== "Unassigned" ? (
+                          <span className="badge" style={{ background: "rgba(139, 92, 246, 0.2)", color: "#c084fc", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            <UserCheck size={11} /> {t.assignee_name}
+                          </span>
+                        ) : (
+                          <span className="badge" style={{ background: "rgba(255, 255, 255, 0.05)", color: "#94a3b8", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            <UserCheck size={11} /> Unassigned
+                          </span>
+                        )}
                         {t.is_sla_breached ? (
                           <span className="sla-pill breached animate-pulse" style={{ fontSize: "0.7rem", padding: "0.2rem 0.5rem" }}>
                             <AlertTriangle size={11} /> SLA Breached
@@ -277,6 +298,12 @@ export default function TicketsPage() {
           )}
         </div>
       </div>
+
+      <TeamWorkloadDrawer
+        isOpen={workloadDrawerOpen}
+        onClose={() => setWorkloadDrawerOpen(false)}
+        onSelectAgentFilter={(agentName) => setSearch(agentName)}
+      />
     </>
   );
 }

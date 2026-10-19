@@ -6,9 +6,14 @@ import Link from "next/link";
 import { 
   AlertTriangle, Clock, ArrowLeft, CheckCircle, Trash2, Send, 
   Sparkles, Bot, Copy, Check, Save, MessageSquare, Loader2, RefreshCw,
-  User, ShieldCheck, HelpCircle, Flame, Smile, Frown, MessageCircle
+  User, ShieldCheck, HelpCircle, Flame, Smile, Frown, MessageCircle,
+  Users, History, Lock
 } from "lucide-react";
 import Navbar from "../../components/Navbar";
+import AssigneeRoutingCard from "../../components/AssigneeRoutingCard";
+import InternalNotesSection from "../../components/InternalNotesSection";
+import TicketAuditTimeline from "../../components/TicketAuditTimeline";
+import TeamWorkloadDrawer from "../../components/TeamWorkloadDrawer";
 
 interface MessageItem {
   id?: number;
@@ -50,6 +55,11 @@ export default function TicketDetail() {
   const [copilotInput, setCopilotInput] = useState("");
   const [copilotLoading, setCopilotLoading] = useState(false);
 
+  // Collaboration & Activity State
+  const [activeBottomTab, setActiveBottomTab] = useState<"notes" | "audit">("notes");
+  const [workloadDrawerOpen, setWorkloadDrawerOpen] = useState(false);
+  const [auditRefreshTrigger, setAuditRefreshTrigger] = useState(0);
+
   useEffect(() => {
     if (id) {
       fetchTicketData();
@@ -77,6 +87,7 @@ export default function TicketDetail() {
     try {
       await axios.put(`http://127.0.0.1:8000/api/tickets/${id}/status`, { status: newStatus });
       setTicket((prev: any) => ({ ...prev, status: newStatus }));
+      setAuditRefreshTrigger(t => t + 1);
     } catch (e) {
       console.error("Failed to update status", e);
     }
@@ -135,6 +146,7 @@ export default function TicketDetail() {
         setTicket(res.data.ticket);
       }
       setDraftText("");
+      setAuditRefreshTrigger(t => t + 1);
       setTimeout(() => setReplySentSuccess(null), 5000);
     } catch (e) {
       console.error("Failed to send reply", e);
@@ -161,6 +173,7 @@ export default function TicketDetail() {
       if (res.data.triage_update?.draft_response) {
         setDraftText(res.data.triage_update.draft_response);
       }
+      setAuditRefreshTrigger(t => t + 1);
     } catch (e) {
       console.error("Failed to simulate reply", e);
       alert("Simulation failed. Ensure backend server is running.");
@@ -312,6 +325,15 @@ export default function TicketDetail() {
           </div>
 
           <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+            <button 
+              id="btn-open-team-workload"
+              className="btn btn-secondary"
+              onClick={() => setWorkloadDrawerOpen(true)}
+              title="View team workload distribution and staffing capacity"
+            >
+              <Users size={16} /> Team Workload
+            </button>
+
             <button 
               className={`btn ${copilotOpen ? "btn-purple" : "btn-secondary"}`}
               onClick={() => setCopilotOpen(!copilotOpen)}
@@ -632,9 +654,21 @@ export default function TicketDetail() {
             </div>
           </div>
 
-          {/* Right Column: AI Triage Metadata + Copilot */}
+          {/* Right Column: Assignee Routing, AI Triage Metadata & Actions */}
           <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
             
+            {/* Assignee Routing & Specialist Allocation Card */}
+            <AssigneeRoutingCard 
+              ticketId={ticket.id}
+              currentAssigneeName={ticket.assignee_name || "Unassigned"}
+              ticketCategory={ticket.category}
+              ticketPriority={ticket.priority}
+              onAssigneeUpdated={(newAssignee) => {
+                setTicket((prev: any) => ({ ...prev, assignee_name: newAssignee }));
+                setAuditRefreshTrigger(t => t + 1);
+              }}
+            />
+
             {/* AI Triage Card */}
             <div className="glass-card" style={{ 
               border: ticket.requires_immediate_escalation === 1 ? "1px solid #ef4444" : undefined 
@@ -850,7 +884,66 @@ export default function TicketDetail() {
             )}
           </div>
         </div>
+
+        {/* Collaboration & Governance Workspace: Staff Notes & Audit Log */}
+        <div style={{ marginTop: "2.5rem" }} id="collaboration-governance-hub">
+          <div style={{ 
+            display: "flex", 
+            justifyContent: "space-between", 
+            alignItems: "center", 
+            borderBottom: "1px solid rgba(255, 255, 255, 0.1)", 
+            paddingBottom: "0.85rem", 
+            marginBottom: "1.25rem",
+            flexWrap: "wrap",
+            gap: "0.75rem"
+          }}>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <button
+                id="tab-internal-notes"
+                onClick={() => setActiveBottomTab("notes")}
+                className={`btn ${activeBottomTab === "notes" ? "btn-warning" : "btn-outline"}`}
+                style={{ fontSize: "0.85rem", padding: "0.5rem 1.1rem", display: "inline-flex", alignItems: "center", gap: "0.5rem" }}
+              >
+                <Lock size={15} /> Private Internal Notes & Handover
+              </button>
+              <button
+                id="tab-audit-trail"
+                onClick={() => setActiveBottomTab("audit")}
+                className={`btn ${activeBottomTab === "audit" ? "btn-primary" : "btn-outline"}`}
+                style={{ fontSize: "0.85rem", padding: "0.5rem 1.1rem", display: "inline-flex", alignItems: "center", gap: "0.5rem" }}
+              >
+                <History size={15} /> Audit Trail & Lifecycle Activity
+              </button>
+            </div>
+
+            <button
+              onClick={() => setWorkloadDrawerOpen(true)}
+              className="btn btn-outline"
+              style={{ fontSize: "0.82rem", padding: "0.45rem 0.85rem", display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+            >
+              <Users size={14} color="#60a5fa" /> Team Capacity Roster
+            </button>
+          </div>
+
+          {activeBottomTab === "notes" ? (
+            <InternalNotesSection 
+              ticketId={ticket.id} 
+              onActivityLogged={() => setAuditRefreshTrigger(t => t + 1)}
+            />
+          ) : (
+            <TicketAuditTimeline 
+              ticketId={ticket.id} 
+              refreshTrigger={auditRefreshTrigger}
+            />
+          )}
+        </div>
       </div>
+
+      {/* Slide-out Team Workload Drawer */}
+      <TeamWorkloadDrawer
+        isOpen={workloadDrawerOpen}
+        onClose={() => setWorkloadDrawerOpen(false)}
+      />
     </>
   );
 }

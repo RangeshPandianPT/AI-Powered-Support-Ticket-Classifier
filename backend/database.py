@@ -53,6 +53,7 @@ def enrich_ticket_data(ticket: Dict[str, Any]) -> Dict[str, Any]:
         ticket["sla_remaining_minutes"] = 0
         ticket["is_sla_breached"] = False
 
+    ticket["assignee_name"] = ticket.get("assignee_name") or "Unassigned"
     return ticket
 
 def init_db():

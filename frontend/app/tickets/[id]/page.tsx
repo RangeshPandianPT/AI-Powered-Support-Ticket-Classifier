@@ -7,13 +7,15 @@ import {
   AlertTriangle, Clock, ArrowLeft, CheckCircle, Trash2, Send, 
   Sparkles, Bot, Copy, Check, Save, MessageSquare, Loader2, RefreshCw,
   User, ShieldCheck, HelpCircle, Flame, Smile, Frown, MessageCircle,
-  Users, History, Lock
+  Users, History, Lock, Zap
 } from "lucide-react";
 import Navbar from "../../components/Navbar";
 import AssigneeRoutingCard from "../../components/AssigneeRoutingCard";
 import InternalNotesSection from "../../components/InternalNotesSection";
 import TicketAuditTimeline from "../../components/TicketAuditTimeline";
 import TeamWorkloadDrawer from "../../components/TeamWorkloadDrawer";
+import AIQualityInspector from "../../components/AIQualityInspector";
+import SmartMacrosModal from "../../components/SmartMacrosModal";
 
 interface MessageItem {
   id?: number;
@@ -59,6 +61,7 @@ export default function TicketDetail() {
   const [activeBottomTab, setActiveBottomTab] = useState<"notes" | "audit">("notes");
   const [workloadDrawerOpen, setWorkloadDrawerOpen] = useState(false);
   const [auditRefreshTrigger, setAuditRefreshTrigger] = useState(0);
+  const [macrosModalOpen, setMacrosModalOpen] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -560,6 +563,15 @@ export default function TicketDetail() {
 
                 <div style={{ display: "flex", gap: "0.5rem" }}>
                   <button 
+                    className="btn btn-secondary btn-sm" 
+                    onClick={() => setMacrosModalOpen(true)}
+                    title="Open Enterprise Smart Macros Library"
+                    style={{ background: "rgba(139, 92, 246, 0.2)", border: "1px solid rgba(139, 92, 246, 0.4)", color: "#c4b5fd", display: "flex", alignItems: "center", gap: 5 }}
+                  >
+                    <Zap size={14} color="#a78bfa" />
+                    <span>Smart Macros</span>
+                  </button>
+                  <button 
                     className="btn btn-outline btn-sm" 
                     onClick={handleCopyDraft}
                     title="Copy response to clipboard"
@@ -652,6 +664,14 @@ export default function TicketDetail() {
                 </button>
               </div>
             </div>
+
+            {/* AI Quality Assurance & CSAT Sentinel */}
+            <AIQualityInspector 
+              ticket={ticket}
+              draftText={draftText}
+              onApplyPolishedDraft={(newDraft) => setDraftText(newDraft)}
+              onRefreshTicket={fetchTicketData}
+            />
           </div>
 
           {/* Right Column: Assignee Routing, AI Triage Metadata & Actions */}
@@ -943,6 +963,14 @@ export default function TicketDetail() {
       <TeamWorkloadDrawer
         isOpen={workloadDrawerOpen}
         onClose={() => setWorkloadDrawerOpen(false)}
+      />
+
+      {/* Enterprise Smart Macros Modal */}
+      <SmartMacrosModal
+        isOpen={macrosModalOpen}
+        onClose={() => setMacrosModalOpen(false)}
+        ticket={ticket}
+        onSelectMacro={(macroText) => setDraftText(macroText)}
       />
     </>
   );

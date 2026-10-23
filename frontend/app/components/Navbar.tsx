@@ -47,6 +47,14 @@ export default function Navbar({ onOpenBatchCSV, onIngestIMAP, isIngesting }: Na
           <Ticket size={16} style={{ display: "inline", marginRight: 6 }} />
           All Tickets
         </Link>
+        <Link href="/analytics" className={`nav-link ${pathname === "/analytics" ? "active" : ""}`}>
+          <span style={{ marginRight: 6 }}>📊</span>
+          SLA & Analytics
+        </Link>
+        <Link href="/portal" className={`nav-link ${pathname === "/portal" ? "active" : ""}`}>
+          <span style={{ marginRight: 6 }}>🌐</span>
+          Customer Portal
+        </Link>
 
         {onOpenBatchCSV && (
           <button 

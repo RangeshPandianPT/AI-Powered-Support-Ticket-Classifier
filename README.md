@@ -21,6 +21,11 @@ This platform automates the ingestion, classification, and drafting of responses
 * **Immutable Audit Trail & Timeline**: Chronological lifecycle event tracking covering state transitions, reassignments, note updates, and reply dispatches with visual diff chips.
 * **Intelligent Agent Routing & AI Auto-Assignment**: Automatic skill- and workload-balanced routing engine across IT, Billing, Customer Success, and Executive Escalations.
 * **Team Workload & Capacity Center**: Real-time slide-out dashboard detailing active ticket counts per agent, capacity progress bars, online shift status, and quick filtering.
+* **AI Quality Assurance (QA) Sentinel & Rubric Auditor**: Real-time 4-pillar evaluation of outbound draft responses (Empathy, Policy Adherence, Actionability, Professionalism) with radial score gauge, compliance checklist, and 1-click AI Polish.
+* **Customer Satisfaction (CSAT) Survey Engine**: 5-star customer feedback simulator, tag categorization, and satisfaction analytics tracking team CSAT averages.
+* **Enterprise Smart Macros Library**: Pre-configured and custom support macro templates with automated dynamic placeholder interpolation (`{{customer_name}}`, `{{ticket_id}}`, `{{agent_name}}`) and AI ticket recommendations.
+* **Executive SLA & Intelligence Center (`/analytics`)**: Full-screen executive mission control tracking SLA compliance rates by priority, breach risks, CSAT distributions, department velocities, and agent leaderboards with CSV export.
+* **Customer Self-Service Portal with AI Deflection (`/portal`)**: Inbound customer helpdesk with live real-time knowledge base deflection that suggests solutions as customers type to prevent unnecessary ticket submissions.
 * **Urgent Escalation System**: Automatically triggers Slack webhook alerts for high-priority frustrated customers.
 * **Email Ingestion Simulation**: Real IMAP email polling with automated mock fallback.
 

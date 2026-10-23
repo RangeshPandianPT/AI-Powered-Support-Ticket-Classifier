@@ -14,6 +14,7 @@ from rag_kb import get_all_kb_docs, add_to_kb, delete_from_kb, search_kb
 from pypdf import PdfReader
 import database as db
 import collaboration as collab
+import qa_and_macros as qam
 
 app = FastAPI(title="AI Support Intelligence API")
 
@@ -29,6 +30,19 @@ app.add_middleware(
 # Initialize DB and collaboration tables
 db.init_db()
 collab.init_collaboration_db()
+qam.init_qa_db()
+
+class QAAuditRequest(BaseModel):
+    draft_text: str
+
+class CSATSubmitRequest(BaseModel):
+    rating: int
+    feedback_tag: str = "Fast Resolution"
+    comment: str = ""
+    customer_name: str = "Customer"
+
+class PortalDeflectRequest(BaseModel):
+    query: str
 
 class TicketRequest(BaseModel):
     ticket_text: str
@@ -516,6 +530,91 @@ async def add_kb_document(
 def delete_kb_document(doc_id: str):
     delete_from_kb(doc_id)
     return {"message": "Document deleted successfully"}
+
+# ==========================================
+# Quality Assurance (QA) & CSAT Endpoints
+# ==========================================
+
+@app.post("/api/tickets/{ticket_id}/qa-audit")
+def qa_audit_endpoint(ticket_id: int, req: QAAuditRequest):
+    ticket = db.get_ticket_by_id(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    kb_context = search_kb(f"{ticket['category']} {ticket['ticket_text']}", n_results=1)
+    qa_eval = qam.evaluate_draft_qa(ticket, req.draft_text, kb_context)
+    qam.save_ticket_qa_score(ticket_id, qa_eval["overall_score"], qa_eval["grade"])
+    collab.log_audit_event(
+        ticket_id=ticket_id,
+        action_type="QA_AUDITED",
+        actor_name="AI QA Sentinel",
+        details=f"Draft evaluated: Score {qa_eval['overall_score']}% (Grade {qa_eval['grade']})"
+    )
+    return qa_eval
+
+@app.post("/api/tickets/{ticket_id}/csat")
+def submit_csat_endpoint(ticket_id: int, req: CSATSubmitRequest):
+    ticket = db.get_ticket_by_id(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    result = qam.submit_csat_survey(
+        ticket_id=ticket_id,
+        rating=req.rating,
+        feedback_tag=req.feedback_tag,
+        comment=req.comment,
+        customer_name=req.customer_name
+    )
+    collab.log_audit_event(
+        ticket_id=ticket_id,
+        action_type="CSAT_LOGGED",
+        actor_name=req.customer_name,
+        details=f"Customer CSAT Survey: {req.rating} / 5 Stars ({req.feedback_tag})"
+    )
+    return result
+
+@app.get("/api/csat/analytics")
+def get_csat_analytics_endpoint():
+    return qam.get_csat_analytics()
+
+# ==========================================
+# Smart Macros Library Endpoints
+# ==========================================
+
+@app.get("/api/macros")
+def get_macros_endpoint():
+    return qam.get_all_macros()
+
+@app.get("/api/tickets/{ticket_id}/macros/recommend")
+def recommend_macros_endpoint(ticket_id: int):
+    ticket = db.get_ticket_by_id(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return qam.get_recommended_macros(ticket)
+
+# ==========================================
+# Customer Portal AI Deflection Endpoint
+# ==========================================
+
+@app.post("/api/portal/deflect")
+def portal_deflect_endpoint(req: PortalDeflectRequest):
+    docs = search_kb(req.query, n_results=2)
+    suggestions = []
+    if docs:
+        for d in docs.split("\n\n"):
+            clean = d.strip()
+            if clean and len(clean) > 20:
+                suggestions.append(clean[:350] + ("..." if len(clean) > 350 else ""))
+    if not suggestions:
+        # Fallback knowledge base guidelines
+        q = req.query.lower()
+        if "refund" in q or "charge" in q or "billing" in q:
+            suggestions.append("Billing Policy: All duplicate or disputed charges are 100% reversed within 3-5 business days upon submission. No cancellation fees apply.")
+        elif "delay" in q or "ship" in q or "track" in q or "package" in q:
+            suggestions.append("Shipping Policy: If tracking hasn't updated for over 48 hours, our fulfillment team initiates an automatic Priority Carrier Trace or dispatches a free replacement.")
+        elif "500" in q or "api" in q or "server" in q or "error" in q:
+            suggestions.append("Technical Support Policy: Production endpoint errors are assigned directly to on-call Engineering Liaisons with a guaranteed 2-hour root cause analysis.")
+        else:
+            suggestions.append("Knowledge Guide: Submit your request below and our automated AI triage system will route you to the appropriate specialist team immediately.")
+    return {"suggestions": suggestions}
 
 if __name__ == "__main__":
     import uvicorn

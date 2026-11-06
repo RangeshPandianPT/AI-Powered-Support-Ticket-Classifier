@@ -51,6 +51,10 @@ export default function Navbar({ onOpenBatchCSV, onIngestIMAP, isIngesting }: Na
           <span style={{ marginRight: 6 }}>📊</span>
           SLA & Analytics
         </Link>
+        <Link href="/incidents" className={`nav-link ${pathname === "/incidents" ? "active" : ""}`}>
+          <span style={{ marginRight: 6 }}>🚨</span>
+          Incident War Room
+        </Link>
         <Link href="/portal" className={`nav-link ${pathname === "/portal" ? "active" : ""}`}>
           <span style={{ marginRight: 6 }}>🌐</span>
           Customer Portal

@@ -7,7 +7,7 @@ import {
   AlertTriangle, Clock, ArrowLeft, CheckCircle, Trash2, Send, 
   Sparkles, Bot, Copy, Check, Save, MessageSquare, Loader2, RefreshCw,
   User, ShieldCheck, HelpCircle, Flame, Smile, Frown, MessageCircle,
-  Users, History, Lock, Zap
+  Users, History, Lock, Zap, Radio, Link2, Unlink
 } from "lucide-react";
 import Navbar from "../../components/Navbar";
 import AssigneeRoutingCard from "../../components/AssigneeRoutingCard";
@@ -63,11 +63,60 @@ export default function TicketDetail() {
   const [auditRefreshTrigger, setAuditRefreshTrigger] = useState(0);
   const [macrosModalOpen, setMacrosModalOpen] = useState(false);
 
+  // Incident Cluster Association State
+  const [linkedIncident, setLinkedIncident] = useState<any>(null);
+  const [allIncidents, setAllIncidents] = useState<any[]>([]);
+  const [selectedIncidentToLink, setSelectedIncidentToLink] = useState<string>("");
+  const [isLinkingIncident, setIsLinkingIncident] = useState(false);
+
   useEffect(() => {
     if (id) {
       fetchTicketData();
+      fetchIncidentData();
     }
   }, [id]);
+
+  const fetchIncidentData = async () => {
+    try {
+      const [incRes, allRes] = await Promise.all([
+        axios.get(`http://127.0.0.1:8000/api/tickets/${id}/incident`),
+        axios.get("http://127.0.0.1:8000/api/incidents")
+      ]);
+      setLinkedIncident(incRes.data || null);
+      setAllIncidents(allRes.data || []);
+    } catch (e) {
+      console.error("Failed to fetch incident data", e);
+    }
+  };
+
+  const handleLinkIncident = async () => {
+    if (!selectedIncidentToLink) return;
+    setIsLinkingIncident(true);
+    try {
+      await axios.post(`http://127.0.0.1:8000/api/tickets/${id}/incident/link`, {
+        incident_id: Number(selectedIncidentToLink),
+        actor_name: ticket?.assignee_name || "Support Agent"
+      });
+      await fetchIncidentData();
+      setAuditRefreshTrigger(t => t + 1);
+    } catch (e) {
+      console.error("Failed to link incident", e);
+    } finally {
+      setIsLinkingIncident(false);
+    }
+  };
+
+  const handleUnlinkIncident = async () => {
+    if (!linkedIncident) return;
+    try {
+      await axios.delete(`http://127.0.0.1:8000/api/incidents/${linkedIncident.id}/tickets/${id}`);
+      setLinkedIncident(null);
+      await fetchIncidentData();
+      setAuditRefreshTrigger(t => t + 1);
+    } catch (e) {
+      console.error("Failed to unlink incident", e);
+    }
+  };
 
   const fetchTicketData = async () => {
     setLoading(true);
@@ -392,6 +441,65 @@ export default function TicketDetail() {
           </div>
         )}
 
+        {/* Linked Incident Outage Alert Banner */}
+        {linkedIncident && (
+          <div style={{
+            background: "rgba(239, 68, 68, 0.12)",
+            border: "1px solid rgba(239, 68, 68, 0.35)",
+            borderRadius: "12px",
+            padding: "1rem 1.25rem",
+            marginBottom: "1.5rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "1rem"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <div style={{
+                background: "rgba(239, 68, 68, 0.25)",
+                padding: "8px",
+                borderRadius: "8px",
+                color: "#f87171"
+              }}>
+                <Radio size={20} className="animate-pulse" />
+              </div>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <strong style={{ color: "#fff", fontSize: "0.95rem" }}>
+                    Linked to Incident Cluster: [{linkedIncident.incident_code}] {linkedIncident.title}
+                  </strong>
+                  <span className={`badge ${linkedIncident.severity.includes("P1") ? "badge-danger" : "badge-warning"}`}>
+                    {linkedIncident.severity}
+                  </span>
+                  <span className="badge badge-neutral">{linkedIncident.status}</span>
+                </div>
+                <div style={{ fontSize: "0.8rem", color: "#cbd5e1", marginTop: "0.2rem" }}>
+                  Root Cause: {linkedIncident.root_cause_analysis || linkedIncident.summary}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <Link 
+                href="/incidents" 
+                className="btn btn-primary btn-sm"
+                style={{ fontSize: "0.78rem", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
+              >
+                <Radio size={14} /> Open War Room
+              </Link>
+              <button 
+                onClick={handleUnlinkIncident}
+                className="btn btn-secondary btn-sm"
+                style={{ fontSize: "0.78rem" }}
+                title="Unlink this ticket from the incident"
+              >
+                Unlink
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Main 2-Column Grid */}
         <div style={{ display: "grid", gridTemplateColumns: copilotOpen ? "1.8fr 1.2fr" : "1.8fr 1.2fr", gap: "2rem" }}>
           
@@ -688,6 +796,80 @@ export default function TicketDetail() {
                 setAuditRefreshTrigger(t => t + 1);
               }}
             />
+
+            {/* Incident Cluster Association Card */}
+            <div className="glass-card">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "0.4rem", margin: 0 }}>
+                  <Radio size={16} color="#ef4444" />
+                  Incident Cluster
+                </h3>
+                {linkedIncident && (
+                  <span className="badge badge-danger" style={{ fontSize: "0.7rem" }}>
+                    {linkedIncident.incident_code}
+                  </span>
+                )}
+              </div>
+
+              {linkedIncident ? (
+                <div>
+                  <div style={{ fontSize: "0.85rem", color: "#e2e8f0", fontWeight: 600, marginBottom: "0.3rem" }}>
+                    {linkedIncident.title}
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
+                    <span className={`badge ${linkedIncident.severity.includes("P1") ? "badge-danger" : "badge-warning"}`}>
+                      {linkedIncident.severity}
+                    </span>
+                    <span className="badge badge-neutral">{linkedIncident.status}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <Link 
+                      href="/incidents"
+                      className="btn btn-secondary btn-sm"
+                      style={{ flex: 1, textAlign: "center", fontSize: "0.75rem", textDecoration: "none" }}
+                    >
+                      War Room
+                    </Link>
+                    <button 
+                      onClick={handleUnlinkIncident}
+                      className="btn btn-outline btn-sm"
+                      style={{ fontSize: "0.75rem" }}
+                    >
+                      Unlink
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <p style={{ fontSize: "0.78rem", color: "#94a3b8", marginBottom: "0.6rem" }}>
+                    Link this ticket to an ongoing incident cluster for mass responses.
+                  </p>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <select 
+                      value={selectedIncidentToLink}
+                      onChange={(e) => setSelectedIncidentToLink(e.target.value)}
+                      className="input-select"
+                      style={{ flex: 1, fontSize: "0.78rem", padding: "0.35rem 0.5rem" }}
+                    >
+                      <option value="">Select Active Incident...</option>
+                      {allIncidents.filter(i => i.status !== "Resolved").map(inc => (
+                        <option key={inc.id} value={inc.id}>
+                          {inc.incident_code}: {inc.title.slice(0, 24)}...
+                        </option>
+                      ))}
+                    </select>
+                    <button 
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleLinkIncident}
+                      disabled={!selectedIncidentToLink || isLinkingIncident}
+                      style={{ fontSize: "0.75rem" }}
+                    >
+                      {isLinkingIncident ? "..." : "Link"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* AI Triage Card */}
             <div className="glass-card" style={{ 

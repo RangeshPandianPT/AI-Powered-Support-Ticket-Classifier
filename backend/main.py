@@ -15,6 +15,7 @@ from pypdf import PdfReader
 import database as db
 import collaboration as collab
 import qa_and_macros as qam
+import incident_management as im
 
 app = FastAPI(title="AI Support Intelligence API")
 
@@ -27,10 +28,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize DB and collaboration tables
+# Initialize DB, collaboration, QA and incident tables
 db.init_db()
 collab.init_collaboration_db()
 qam.init_qa_db()
+im.init_incident_db()
+
+class IncidentCreateRequest(BaseModel):
+    title: str
+    severity: str = "P2 - Major"
+    category: str = "Technical"
+    summary: str = ""
+    root_cause_analysis: str = ""
+    impacted_services: Optional[List[str]] = None
+    suggested_action: str = ""
+    lead_responder: str = "Support Lead"
+    ticket_ids: Optional[List[int]] = None
+
+class IncidentBroadcastRequest(BaseModel):
+    broadcast_message: str
+    new_status: Optional[str] = None
+    mark_tickets_resolved: bool = False
+    actor_name: str = "Incident Commander"
+
+class IncidentLinkRequest(BaseModel):
+    incident_id: int
+    actor_name: str = "Support Agent"
+
+class IncidentResolveRequest(BaseModel):
+    resolution_notes: str
+    actor_name: str = "Incident Commander"
 
 class QAAuditRequest(BaseModel):
     draft_text: str
@@ -615,6 +642,84 @@ def portal_deflect_endpoint(req: PortalDeflectRequest):
         else:
             suggestions.append("Knowledge Guide: Submit your request below and our automated AI triage system will route you to the appropriate specialist team immediately.")
     return {"suggestions": suggestions}
+
+# ==========================================
+# Incident War Room & Outage Clustering API
+# ==========================================
+
+@app.get("/api/incidents")
+def list_incidents_endpoint(status: str = "All", severity: str = "All"):
+    return im.get_all_incidents(status_filter=status, severity_filter=severity)
+
+@app.get("/api/incidents/{incident_id}")
+def get_incident_endpoint(incident_id: int):
+    inc = im.get_incident_by_id(incident_id)
+    if not inc:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return inc
+
+@app.post("/api/incidents")
+def create_incident_endpoint(req: IncidentCreateRequest):
+    return im.create_incident(
+        title=req.title,
+        severity=req.severity,
+        category=req.category,
+        summary=req.summary,
+        root_cause_analysis=req.root_cause_analysis,
+        impacted_services=req.impacted_services,
+        suggested_action=req.suggested_action,
+        lead_responder=req.lead_responder,
+        ticket_ids=req.ticket_ids
+    )
+
+@app.post("/api/incidents/detect")
+def detect_incident_clusters_endpoint():
+    return im.detect_incident_clusters()
+
+@app.post("/api/incidents/{incident_id}/broadcast")
+def broadcast_incident_endpoint(incident_id: int, req: IncidentBroadcastRequest):
+    try:
+        return im.broadcast_incident_update(
+            incident_id=incident_id,
+            broadcast_message=req.broadcast_message,
+            new_status=req.new_status,
+            mark_tickets_resolved=req.mark_tickets_resolved,
+            actor_name=req.actor_name
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/incidents/{incident_id}/resolve")
+def resolve_incident_endpoint(incident_id: int, req: IncidentResolveRequest):
+    try:
+        return im.resolve_incident(
+            incident_id=incident_id,
+            resolution_notes=req.resolution_notes,
+            actor_name=req.actor_name
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@app.get("/api/tickets/{ticket_id}/incident")
+def get_ticket_incident_endpoint(ticket_id: int):
+    return im.get_ticket_incident(ticket_id)
+
+@app.post("/api/tickets/{ticket_id}/incident/link")
+def link_ticket_incident_endpoint(ticket_id: int, req: IncidentLinkRequest):
+    ticket = db.get_ticket_by_id(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    success = im.link_ticket_to_incident(req.incident_id, ticket_id, req.actor_name)
+    if not success:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return {"message": "Ticket successfully linked to incident"}
+
+@app.delete("/api/incidents/{incident_id}/tickets/{ticket_id}")
+def unlink_ticket_incident_endpoint(incident_id: int, ticket_id: int):
+    im.unlink_ticket_from_incident(incident_id, ticket_id)
+    return {"message": "Ticket unlinked from incident"}
 
 if __name__ == "__main__":
     import uvicorn

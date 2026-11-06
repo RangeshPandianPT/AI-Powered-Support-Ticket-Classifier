@@ -25,6 +25,7 @@ This platform automates the ingestion, classification, and drafting of responses
 * **Customer Satisfaction (CSAT) Survey Engine**: 5-star customer feedback simulator, tag categorization, and satisfaction analytics tracking team CSAT averages.
 * **Enterprise Smart Macros Library**: Pre-configured and custom support macro templates with automated dynamic placeholder interpolation (`{{customer_name}}`, `{{ticket_id}}`, `{{agent_name}}`) and AI ticket recommendations.
 * **Executive SLA & Intelligence Center (`/analytics`)**: Full-screen executive mission control tracking SLA compliance rates by priority, breach risks, CSAT distributions, department velocities, and agent leaderboards with CSV export.
+* **Incident Command Center & Outage War Room (`/incidents`)**: Automated multi-ticket pattern clustering, outage detection, AI Root Cause Analysis (RCA), and 1-click Mass Customer Broadcast dispatch across all affected tickets.
 * **Customer Self-Service Portal with AI Deflection (`/portal`)**: Inbound customer helpdesk with live real-time knowledge base deflection that suggests solutions as customers type to prevent unnecessary ticket submissions.
 * **Urgent Escalation System**: Automatically triggers Slack webhook alerts for high-priority frustrated customers.
 * **Email Ingestion Simulation**: Real IMAP email polling with automated mock fallback.

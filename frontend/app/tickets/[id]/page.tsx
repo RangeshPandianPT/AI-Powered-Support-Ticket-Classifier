@@ -69,12 +69,50 @@ export default function TicketDetail() {
   const [selectedIncidentToLink, setSelectedIncidentToLink] = useState<string>("");
   const [isLinkingIncident, setIsLinkingIncident] = useState(false);
 
+  // Auto-Pilot Rules State
+  const [automationLogs, setAutomationLogs] = useState<any[]>([]);
+  const [runningAutomations, setRunningAutomations] = useState(false);
+  const [automationFeedback, setAutomationFeedback] = useState<string | null>(null);
+
   useEffect(() => {
     if (id) {
       fetchTicketData();
       fetchIncidentData();
+      fetchAutomationLogs();
     }
   }, [id]);
+
+  const fetchAutomationLogs = async () => {
+    try {
+      const res = await axios.get(`http://127.0.0.1:8000/api/tickets/${id}/automations/logs`);
+      setAutomationLogs(res.data || []);
+    } catch (e) {
+      console.error("Failed to fetch automation logs", e);
+    }
+  };
+
+  const handleRunAutomations = async () => {
+    setRunningAutomations(true);
+    setAutomationFeedback(null);
+    try {
+      const res = await axios.post(`http://127.0.0.1:8000/api/tickets/${id}/automations/run`, {
+        dry_run: false,
+        trigger_event: "ON_MANUAL"
+      });
+      const count = res.data?.rules_matched || 0;
+      setAutomationFeedback(
+        count > 0
+          ? `Executed ${count} Auto-Pilot rule(s)!`
+          : "All active rules evaluated — no new triggers matched."
+      );
+      await Promise.all([fetchTicketData(), fetchIncidentData(), fetchAutomationLogs()]);
+      setAuditRefreshTrigger(t => t + 1);
+    } catch (e) {
+      console.error("Failed to run automations", e);
+    } finally {
+      setRunningAutomations(false);
+    }
+  };
 
   const fetchIncidentData = async () => {
     try {
@@ -869,6 +907,66 @@ export default function TicketDetail() {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Auto-Pilot Workflow Rules Card */}
+            <div className="glass-card">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "0.4rem", margin: 0 }}>
+                  <Zap size={16} color="#f59e0b" />
+                  Auto-Pilot Rules
+                </h3>
+                <Link href="/automations" style={{ fontSize: "0.74rem", color: "#38bdf8", textDecoration: "none" }}>
+                  Manage Rules
+                </Link>
+              </div>
+
+              {automationFeedback && (
+                <div style={{
+                  fontSize: "0.78rem",
+                  color: "#fde68a",
+                  background: "rgba(245, 158, 11, 0.14)",
+                  border: "1px solid rgba(245, 158, 11, 0.3)",
+                  padding: "0.45rem 0.65rem",
+                  borderRadius: "6px",
+                  marginBottom: "0.65rem"
+                }}>
+                  {automationFeedback}
+                </div>
+              )}
+
+              {automationLogs.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem", marginBottom: "0.75rem", maxHeight: "140px", overflowY: "auto" }}>
+                  {automationLogs.map((log: any) => (
+                    <div key={log.id} style={{
+                      fontSize: "0.78rem",
+                      background: "rgba(255, 255, 255, 0.03)",
+                      border: "1px solid rgba(255, 255, 255, 0.07)",
+                      borderRadius: "6px",
+                      padding: "0.45rem 0.65rem"
+                    }}>
+                      <div style={{ fontWeight: 700, color: "#fbbf24" }}>⚡ {log.rule_name}</div>
+                      <div style={{ color: "#94a3b8", fontSize: "0.72rem", marginTop: "0.15rem" }}>
+                        {(log.actions_applied || []).join(" • ")}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ fontSize: "0.78rem", color: "#94a3b8", marginBottom: "0.75rem" }}>
+                  No automated workflow triggers have executed on this ticket yet.
+                </p>
+              )}
+
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={handleRunAutomations}
+                disabled={runningAutomations}
+                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", fontSize: "0.78rem" }}
+              >
+                <Zap size={14} color="#f59e0b" />
+                {runningAutomations ? "Evaluating Rules..." : "Run Auto-Pilot Rules Now"}
+              </button>
             </div>
 
             {/* AI Triage Card */}

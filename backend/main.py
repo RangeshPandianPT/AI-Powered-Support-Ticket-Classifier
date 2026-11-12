@@ -16,6 +16,7 @@ import database as db
 import collaboration as collab
 import qa_and_macros as qam
 import incident_management as im
+import automation_rules as rules_engine
 
 app = FastAPI(title="AI Support Intelligence API")
 
@@ -28,11 +29,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize DB, collaboration, QA and incident tables
+# Initialize DB, collaboration, QA, incident, and automation tables
 db.init_db()
 collab.init_collaboration_db()
 qam.init_qa_db()
 im.init_incident_db()
+rules_engine.init_rules_db()
+
+class AutomationRuleCreateRequest(BaseModel):
+    name: str
+    description: str = ""
+    trigger_event: str = "ON_INGEST"
+    conditions: List[Dict[str, Any]]
+    actions: List[Dict[str, Any]]
+
+class AutomationRunRequest(BaseModel):
+    dry_run: bool = False
+    trigger_event: str = "ON_MANUAL"
 
 class IncidentCreateRequest(BaseModel):
     title: str
@@ -148,6 +161,13 @@ def classify_ticket_endpoint(req: TicketRequest):
             actor_role="AI System",
             details=f"Ticket ingested and categorized as {classification.category.value} ({classification.priority.value} Priority)"
         )
+
+        # Evaluate Auto-Pilot Workflow Rules on ingestion
+        try:
+            auto_res = rules_engine.evaluate_ticket_rules(db_id, trigger_event="ON_INGEST")
+        except Exception as rule_err:
+            print(f"[Auto-Pilot Error]: {rule_err}")
+            auto_res = {"rules_matched": 0, "matches": []}
         
         return {
             "id": db_id,
@@ -155,7 +175,8 @@ def classify_ticket_endpoint(req: TicketRequest):
             "provider_used": result["provider_used"],
             "kb_context_used": result.get("kb_context"),
             "notification_sent": result.get("notification_sent"),
-            "steps": result.get("steps", [])
+            "steps": result.get("steps", []),
+            "automations_triggered": auto_res.get("matches", [])
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -443,6 +464,10 @@ def ingest_emails_endpoint(background_tasks: BackgroundTasks):
                 provider_used=res.get("provider_used", "Auto"), 
                 status="Open"
             )
+            try:
+                rules_engine.evaluate_ticket_rules(db_id, trigger_event="ON_INGEST")
+            except Exception as rule_err:
+                print(f"[Auto-Pilot Email Error]: {rule_err}")
             results.append({"email_id": email["id"], "db_id": db_id, "status": "Success"})
         else:
             results.append({"email_id": email["id"], "status": "Failed"})
@@ -496,6 +521,10 @@ async def batch_csv_endpoint(file: Optional[UploadFile] = File(None)):
                     provider_used=res.get("provider_used", "Auto"),
                     status="Open"
                 )
+                try:
+                    rules_engine.evaluate_ticket_rules(db_id, trigger_event="ON_INGEST")
+                except Exception as rule_err:
+                    print(f"[Auto-Pilot Batch Error]: {rule_err}")
                 processed.append({
                     "id": db_id,
                     "customer": row.get("Customer Name", "Customer"),
@@ -596,6 +625,17 @@ def submit_csat_endpoint(ticket_id: int, req: CSATSubmitRequest):
         actor_name=req.customer_name,
         details=f"Customer CSAT Survey: {req.rating} / 5 Stars ({req.feedback_tag})"
     )
+
+    # Evaluate CSAT-triggered automation rules (e.g. Low CSAT Recovery)
+    try:
+        rules_engine.evaluate_ticket_rules(
+            ticket_id,
+            trigger_event="ON_CSAT",
+            extra_context={"csat_rating": req.rating}
+        )
+    except Exception as rule_err:
+        print(f"[Auto-Pilot CSAT Error]: {rule_err}")
+
     return result
 
 @app.get("/api/csat/analytics")
@@ -720,6 +760,62 @@ def link_ticket_incident_endpoint(ticket_id: int, req: IncidentLinkRequest):
 def unlink_ticket_incident_endpoint(incident_id: int, ticket_id: int):
     im.unlink_ticket_from_incident(incident_id, ticket_id)
     return {"message": "Ticket unlinked from incident"}
+
+# ==========================================
+# Auto-Pilot Workflow & Trigger Rules API
+# ==========================================
+
+@app.get("/api/automations")
+def list_automations_endpoint():
+    return rules_engine.get_all_rules()
+
+@app.post("/api/automations")
+def create_automation_endpoint(req: AutomationRuleCreateRequest):
+    return rules_engine.create_rule(
+        name=req.name,
+        description=req.description,
+        trigger_event=req.trigger_event,
+        conditions=req.conditions,
+        actions=req.actions
+    )
+
+@app.put("/api/automations/{rule_id}/toggle")
+def toggle_automation_endpoint(rule_id: int):
+    new_state = rules_engine.toggle_rule(rule_id)
+    if new_state is None:
+        raise HTTPException(status_code=404, detail="Automation rule not found")
+    return {"id": rule_id, "is_active": new_state}
+
+@app.delete("/api/automations/{rule_id}")
+def delete_automation_endpoint(rule_id: int):
+    deleted = rules_engine.delete_rule(rule_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Automation rule not found")
+    return {"message": "Automation rule deleted"}
+
+@app.get("/api/automations/logs")
+def get_automation_logs_endpoint(limit: int = 40):
+    return rules_engine.get_execution_logs(limit=limit)
+
+@app.post("/api/tickets/{ticket_id}/automations/run")
+def run_ticket_automations_endpoint(ticket_id: int, req: AutomationRunRequest):
+    try:
+        return rules_engine.evaluate_ticket_rules(
+            ticket_id=ticket_id,
+            trigger_event=req.trigger_event,
+            dry_run=req.dry_run
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/tickets/{ticket_id}/automations/logs")
+def get_ticket_automation_logs_endpoint(ticket_id: int):
+    ticket = db.get_ticket_by_id(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return rules_engine.get_ticket_automation_logs(ticket_id)
 
 if __name__ == "__main__":
     import uvicorn

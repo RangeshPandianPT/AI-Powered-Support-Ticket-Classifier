@@ -7,7 +7,7 @@ import {
   AlertTriangle, Clock, ArrowLeft, CheckCircle, Trash2, Send, 
   Sparkles, Bot, Copy, Check, Save, MessageSquare, Loader2, RefreshCw,
   User, ShieldCheck, HelpCircle, Flame, Smile, Frown, MessageCircle,
-  Users, History, Lock, Zap, Radio, Link2, Unlink
+  Users, History, Lock, Zap, Radio, Link2, Unlink, Building2, HeartHandshake
 } from "lucide-react";
 import Navbar from "../../components/Navbar";
 import AssigneeRoutingCard from "../../components/AssigneeRoutingCard";
@@ -74,13 +74,41 @@ export default function TicketDetail() {
   const [runningAutomations, setRunningAutomations] = useState(false);
   const [automationFeedback, setAutomationFeedback] = useState<string | null>(null);
 
+  // Customer 360 Intelligence State
+  const [customer360, setCustomer360] = useState<any>(null);
+  const [retentionMemo, setRetentionMemo] = useState<any>(null);
+  const [generatingRetentionMemo, setGeneratingRetentionMemo] = useState(false);
+
   useEffect(() => {
     if (id) {
       fetchTicketData();
       fetchIncidentData();
       fetchAutomationLogs();
+      fetchCustomer360();
     }
   }, [id]);
+
+  const fetchCustomer360 = async () => {
+    try {
+      const res = await axios.get(`http://127.0.0.1:8000/api/tickets/${id}/customer`);
+      setCustomer360(res.data);
+    } catch (e) {
+      console.error("Failed to fetch customer 360", e);
+    }
+  };
+
+  const handleGenerateTicketRetention = async () => {
+    if (!customer360) return;
+    setGeneratingRetentionMemo(true);
+    try {
+      const res = await axios.post(`http://127.0.0.1:8000/api/customers/${customer360.id}/retention-playbook`);
+      setRetentionMemo(res.data);
+    } catch (e) {
+      console.error("Failed to generate retention memo", e);
+    } finally {
+      setGeneratingRetentionMemo(false);
+    }
+  };
 
   const fetchAutomationLogs = async () => {
     try {
@@ -823,6 +851,77 @@ export default function TicketDetail() {
           {/* Right Column: Assignee Routing, AI Triage Metadata & Actions */}
           <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
             
+            {/* Customer 360 & Churn Intelligence Card */}
+            {customer360 && (
+              <div className="glass-card" style={{ borderLeft: `4px solid ${customer360.risk_color || '#3b82f6'}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
+                  <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "0.4rem", margin: 0 }}>
+                    <Building2 size={16} color="#38bdf8" />
+                    Customer 360
+                  </h3>
+                  <Link href="/customers" style={{ fontSize: "0.74rem", color: "#38bdf8", textDecoration: "none" }}>
+                    Dossier &rarr;
+                  </Link>
+                </div>
+
+                <div style={{ marginBottom: "0.6rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.2rem" }}>
+                    <strong style={{ fontSize: "0.92rem", color: "#fff" }}>
+                      {customer360.company || customer360.name}
+                    </strong>
+                    <span className="badge badge-warning" style={{ fontSize: "0.68rem" }}>
+                      {customer360.tier}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#94a3b8" }}>
+                    {customer360.name} &bull; {customer360.email}
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", background: "rgba(255, 255, 255, 0.03)", padding: "0.5rem 0.65rem", borderRadius: "6px", marginBottom: "0.75rem", fontSize: "0.78rem" }}>
+                  <div>
+                    <span style={{ color: "#94a3b8" }}>Health Score:</span>{" "}
+                    <strong style={{ color: customer360.risk_color }}>{customer360.health_score}/100</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#94a3b8" }}>Churn Risk:</span>{" "}
+                    <strong style={{ color: customer360.risk_color }}>{customer360.churn_risk}%</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#94a3b8" }}>MRR:</span>{" "}
+                    <strong style={{ color: "#34d399" }}>${(customer360.mrr || 0).toLocaleString()}/mo</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#94a3b8" }}>Total Tickets:</span>{" "}
+                    <strong style={{ color: "#e2e8f0" }}>{customer360.total_tickets}</strong>
+                  </div>
+                </div>
+
+                {customer360.churn_risk >= 45 && !retentionMemo && (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleGenerateTicketRetention}
+                    disabled={generatingRetentionMemo}
+                    style={{ width: "100%", fontSize: "0.76rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem" }}
+                  >
+                    <HeartHandshake size={14} color="#f87171" />
+                    {generatingRetentionMemo ? "Synthesizing..." : "Generate Retention Playbook"}
+                  </button>
+                )}
+
+                {retentionMemo && (
+                  <div style={{ background: "rgba(56, 189, 248, 0.08)", border: "1px solid rgba(56, 189, 248, 0.25)", padding: "0.55rem 0.75rem", borderRadius: "6px", fontSize: "0.76rem" }}>
+                    <div style={{ fontWeight: 700, color: "#38bdf8", marginBottom: "0.2rem" }}>
+                      AI Retention Offer:
+                    </div>
+                    <div style={{ color: "#fde68a", lineHeight: 1.4 }}>
+                      {retentionMemo.concession_offer}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Assignee Routing & Specialist Allocation Card */}
             <AssigneeRoutingCard 
               ticketId={ticket.id}

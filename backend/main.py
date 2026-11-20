@@ -17,6 +17,7 @@ import collaboration as collab
 import qa_and_macros as qam
 import incident_management as im
 import automation_rules as rules_engine
+import customer_intelligence as cust_intel
 
 app = FastAPI(title="AI Support Intelligence API")
 
@@ -29,12 +30,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize DB, collaboration, QA, incident, and automation tables
+# Initialize DB, collaboration, QA, incident, automation, and customer tables
 db.init_db()
 collab.init_collaboration_db()
 qam.init_qa_db()
 im.init_incident_db()
 rules_engine.init_rules_db()
+cust_intel.init_customer_db()
+
+class CustomerTierUpdateRequest(BaseModel):
+    tier: str
+    mrr: Optional[float] = None
+
+class CustomerLinkRequest(BaseModel):
+    customer_id: int
 
 class AutomationRuleCreateRequest(BaseModel):
     name: str
@@ -816,6 +825,47 @@ def get_ticket_automation_logs_endpoint(ticket_id: int):
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
     return rules_engine.get_ticket_automation_logs(ticket_id)
+
+# ==========================================
+# Customer 360 & Predictive Churn Intelligence API
+# ==========================================
+
+@app.get("/api/customers")
+def list_customers_endpoint(tier: str = "All", risk: str = "All", search: str = ""):
+    return cust_intel.get_all_customers(tier_filter=tier, risk_filter=risk, search=search)
+
+@app.get("/api/customers/{customer_id}")
+def get_customer_endpoint(customer_id: int):
+    cust = cust_intel.get_customer_by_id(customer_id)
+    if not cust:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return cust
+
+@app.post("/api/customers/{customer_id}/retention-playbook")
+def generate_retention_playbook_endpoint(customer_id: int):
+    try:
+        return cust_intel.generate_retention_playbook(customer_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/tickets/{ticket_id}/customer")
+def get_ticket_customer_endpoint(ticket_id: int):
+    profile = cust_intel.get_customer_for_ticket(ticket_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Customer profile not found for ticket")
+    return profile
+
+@app.post("/api/tickets/{ticket_id}/customer/link")
+def link_ticket_customer_endpoint(ticket_id: int, req: CustomerLinkRequest):
+    ticket = db.get_ticket_by_id(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    success = cust_intel.link_ticket_customer(ticket_id, req.customer_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Customer account not found")
+    return {"message": "Customer linked successfully"}
 
 if __name__ == "__main__":
     import uvicorn

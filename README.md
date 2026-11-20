@@ -26,6 +26,8 @@ This platform automates the ingestion, classification, and drafting of responses
 * **Enterprise Smart Macros Library**: Pre-configured and custom support macro templates with automated dynamic placeholder interpolation (`{{customer_name}}`, `{{ticket_id}}`, `{{agent_name}}`) and AI ticket recommendations.
 * **Executive SLA & Intelligence Center (`/analytics`)**: Full-screen executive mission control tracking SLA compliance rates by priority, breach risks, CSAT distributions, department velocities, and agent leaderboards with CSV export.
 * **Incident Command Center & Outage War Room (`/incidents`)**: Automated multi-ticket pattern clustering, outage detection, AI Root Cause Analysis (RCA), and 1-click Mass Customer Broadcast dispatch across all affected tickets.
+* **Auto-Pilot Workflow & Trigger Rules Engine (`/automations`)**: Visual IF/THEN automation rules with live simulator, condition evaluation, and automated actions (VIP escalation, outage linking, macro staging, and CSAT recovery).
+* **Customer 360 & Predictive Churn Radar (`/customers`)**: Account health scoring, predictive churn risk analysis, lifetime sentiment trajectories, and AI-synthesized retention playbooks with courtesy concession offers.
 * **Customer Self-Service Portal with AI Deflection (`/portal`)**: Inbound customer helpdesk with live real-time knowledge base deflection that suggests solutions as customers type to prevent unnecessary ticket submissions.
 * **Urgent Escalation System**: Automatically triggers Slack webhook alerts for high-priority frustrated customers.
 * **Email Ingestion Simulation**: Real IMAP email polling with automated mock fallback.

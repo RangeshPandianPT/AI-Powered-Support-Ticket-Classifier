@@ -417,6 +417,31 @@ export default function TicketDetail() {
               </span>
               <span className="badge badge-neutral">{ticket.assigned_team}</span>
 
+              {/* Omnichannel Origin Badge */}
+              <span style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                padding: "3px 8px",
+                borderRadius: "6px",
+                background: ticket.channel === "whatsapp" ? "rgba(34, 197, 94, 0.2)" :
+                            ticket.channel === "slack" ? "rgba(168, 85, 247, 0.2)" :
+                            ticket.channel === "sms" ? "rgba(249, 115, 22, 0.2)" :
+                            ticket.channel === "chat" ? "rgba(14, 165, 233, 0.2)" : "rgba(148, 163, 184, 0.2)",
+                color: ticket.channel === "whatsapp" ? "#4ade80" :
+                       ticket.channel === "slack" ? "#c084fc" :
+                       ticket.channel === "sms" ? "#fb923c" :
+                       ticket.channel === "chat" ? "#38bdf8" : "#cbd5e1",
+                border: "1px solid rgba(255, 255, 255, 0.1)"
+              }}>
+                {ticket.channel === "whatsapp" ? "💬 WhatsApp" :
+                 ticket.channel === "slack" ? "🟣 Slack" :
+                 ticket.channel === "sms" ? "📱 SMS" :
+                 ticket.channel === "chat" ? "💬 Live Chat" : "📧 Email"}
+              </span>
+
               {/* SLA Target Badge */}
               {ticket.is_sla_breached ? (
                 <span className="sla-pill breached animate-pulse">
@@ -834,7 +859,7 @@ export default function TicketDetail() {
                   disabled={!draftText.trim() || isSendingReply}
                 >
                   {isSendingReply ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                  <span>Simulate Send Email Reply</span>
+                  <span>Dispatch via {ticket.channel ? ticket.channel.toUpperCase() : "Email"} Reply</span>
                 </button>
               </div>
             </div>

@@ -28,6 +28,7 @@ This platform automates the ingestion, classification, and drafting of responses
 * **Incident Command Center & Outage War Room (`/incidents`)**: Automated multi-ticket pattern clustering, outage detection, AI Root Cause Analysis (RCA), and 1-click Mass Customer Broadcast dispatch across all affected tickets.
 * **Auto-Pilot Workflow & Trigger Rules Engine (`/automations`)**: Visual IF/THEN automation rules with live simulator, condition evaluation, and automated actions (VIP escalation, outage linking, macro staging, and CSAT recovery).
 * **Customer 360 & Predictive Churn Radar (`/customers`)**: Account health scoring, predictive churn risk analysis, lifetime sentiment trajectories, and AI-synthesized retention playbooks with courtesy concession offers.
+* **Omnichannel Communications Command Center (`/channels`)**: Real-time telemetry and inbound simulation across WhatsApp Business, Slack Connect, Live Webchat, Twilio SMS, and Email with multi-channel triage and delivery receipts.
 * **Customer Self-Service Portal with AI Deflection (`/portal`)**: Inbound customer helpdesk with live real-time knowledge base deflection that suggests solutions as customers type to prevent unnecessary ticket submissions.
 * **Urgent Escalation System**: Automatically triggers Slack webhook alerts for high-priority frustrated customers.
 * **Email Ingestion Simulation**: Real IMAP email polling with automated mock fallback.

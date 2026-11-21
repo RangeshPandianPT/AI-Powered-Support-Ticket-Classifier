@@ -18,6 +18,7 @@ import qa_and_macros as qam
 import incident_management as im
 import automation_rules as rules_engine
 import customer_intelligence as cust_intel
+import omnichannel as omni
 
 app = FastAPI(title="AI Support Intelligence API")
 
@@ -30,13 +31,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize DB, collaboration, QA, incident, automation, and customer tables
+# Initialize DB, collaboration, QA, incident, automation, customer, and omnichannel tables
 db.init_db()
 collab.init_collaboration_db()
 qam.init_qa_db()
 im.init_incident_db()
 rules_engine.init_rules_db()
 cust_intel.init_customer_db()
+omni.init_omnichannel_db()
+
+class ChannelSimulateRequest(BaseModel):
+    channel: str = "whatsapp"
+    sender_name: str = "Customer"
+    sender_contact: str = "+1 (555) 234-8901"
+    message_text: str
+    channel_metadata: Optional[Dict[str, Any]] = None
+
+class ChannelReplyRequest(BaseModel):
+    reply_text: str
+    channel: Optional[str] = "email"
+    recipient: Optional[str] = None
+    mark_resolved: bool = False
+    actor_name: str = "Support Agent"
 
 class CustomerTierUpdateRequest(BaseModel):
     tier: str
@@ -866,6 +882,51 @@ def link_ticket_customer_endpoint(ticket_id: int, req: CustomerLinkRequest):
     if not success:
         raise HTTPException(status_code=404, detail="Customer account not found")
     return {"message": "Customer linked successfully"}
+
+# ==========================================
+# Omnichannel Ingestion & Gateway API
+# ==========================================
+
+@app.get("/api/channels/status")
+def get_channels_status_endpoint():
+    return omni.get_channel_statuses()
+
+@app.get("/api/channels/presets")
+def get_channels_presets_endpoint():
+    return omni.get_channel_presets()
+
+@app.get("/api/channels/analytics")
+def get_channels_analytics_endpoint():
+    return omni.get_omnichannel_analytics()
+
+@app.post("/api/channels/simulate-inbound")
+def simulate_channel_inbound_endpoint(req: ChannelSimulateRequest):
+    try:
+        return omni.simulate_inbound_message(
+            channel=req.channel,
+            sender_name=req.sender_name,
+            sender_contact=req.sender_contact,
+            message_text=req.message_text,
+            channel_metadata=req.channel_metadata
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/tickets/{ticket_id}/channel-reply")
+def send_channel_reply_endpoint(ticket_id: int, req: ChannelReplyRequest):
+    try:
+        return omni.dispatch_channel_reply(
+            ticket_id=ticket_id,
+            reply_text=req.reply_text,
+            channel=req.channel or "email",
+            recipient=req.recipient,
+            mark_resolved=req.mark_resolved,
+            actor_name=req.actor_name
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

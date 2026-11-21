@@ -63,6 +63,10 @@ export default function Navbar({ onOpenBatchCSV, onIngestIMAP, isIngesting }: Na
           <span style={{ marginRight: 6 }}>👥</span>
           Customer 360
         </Link>
+        <Link href="/channels" className={`nav-link ${pathname === "/channels" ? "active" : ""}`}>
+          <span style={{ marginRight: 6 }}>📡</span>
+          Omnichannel
+        </Link>
         <Link href="/portal" className={`nav-link ${pathname === "/portal" ? "active" : ""}`}>
           <span style={{ marginRight: 6 }}>🌐</span>
           Customer Portal

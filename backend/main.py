@@ -10,7 +10,10 @@ from database import get_all_tickets, save_ticket, update_ticket_status, delete_
 from langgraph_workflow import run_ticket_workflow
 from email_ingestion import check_new_emails
 from classifier import rewrite_draft_llm, copilot_chat_llm, simulate_customer_reply_llm, reclassify_conversation_thread
-from rag_kb import get_all_kb_docs, add_to_kb, delete_from_kb, search_kb
+from rag_kb import (
+    get_all_kb_docs, add_to_kb, delete_from_kb, search_kb,
+    search_kb_with_scores, analyze_knowledge_gaps, synthesize_kb_article
+)
 from pypdf import PdfReader
 import database as db
 import collaboration as collab
@@ -611,6 +614,45 @@ async def add_kb_document(
 def delete_kb_document(doc_id: str):
     delete_from_kb(doc_id)
     return {"message": "Document deleted successfully"}
+
+class KBSearchRequest(BaseModel):
+    query: str
+    n_results: int = 3
+
+class KBSynthesizeRequest(BaseModel):
+    topic: Optional[str] = None
+    ticket_id: Optional[int] = None
+    auto_publish: bool = False
+
+@app.post("/api/kb/search")
+def search_kb_endpoint(req: KBSearchRequest):
+    return {"query": req.query, "results": search_kb_with_scores(req.query, req.n_results)}
+
+@app.get("/api/kb/gaps")
+def get_kb_gaps_endpoint():
+    return analyze_knowledge_gaps()
+
+@app.post("/api/kb/synthesize")
+def synthesize_kb_endpoint(req: KBSynthesizeRequest):
+    try:
+        res = synthesize_kb_article(
+            topic=req.topic,
+            ticket_id=req.ticket_id,
+            auto_publish=req.auto_publish
+        )
+        if req.ticket_id and req.auto_publish and res.get("doc_id"):
+            collab.log_audit_event(
+                ticket_id=req.ticket_id,
+                action_type="KB_ARTICLE_PUBLISHED",
+                actor_name="AI Knowledge Synthesizer",
+                actor_role="System",
+                details=f"Promoted ticket resolution to Knowledge Base ({res['doc_id']}): {res['title']}"
+            )
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ==========================================
 # Quality Assurance (QA) & CSAT Endpoints

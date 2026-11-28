@@ -1,15 +1,25 @@
 "use client";
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { BookOpen, Upload, Trash2, FileText, CheckCircle, Database, Plus, Search } from "lucide-react";
+import { BookOpen, Upload, Trash2, FileText, CheckCircle, Database, Plus, Search, Sparkles, AlertTriangle, RefreshCw } from "lucide-react";
 
 export default function KnowledgeBase() {
   const [docs, setDocs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [textInput, setTextInput] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [activeTab, setActiveTab] = useState<"text" | "file">("file");
+  const [activeTab, setActiveTab] = useState<"file" | "text" | "search" | "gaps">("file");
   const [searchFilter, setSearchFilter] = useState("");
+
+  // Semantic RAG Tester State
+  const [ragQuery, setRagQuery] = useState("");
+  const [ragResults, setRagResults] = useState<any[]>([]);
+  const [searchingRag, setSearchingRag] = useState(false);
+
+  // AI Gap Detector State
+  const [gapReport, setGapReport] = useState<any>(null);
+  const [scanningGaps, setScanningGaps] = useState(false);
+  const [publishingGap, setPublishingGap] = useState<string | null>(null);
 
   const fetchDocs = async () => {
     try {
@@ -67,6 +77,51 @@ export default function KnowledgeBase() {
     }
   };
 
+  const handleSemanticSearch = async () => {
+    if (!ragQuery.trim()) return;
+    setSearchingRag(true);
+    try {
+      const res = await axios.post("http://127.0.0.1:8000/api/kb/search", {
+        query: ragQuery,
+        n_results: 3
+      });
+      setRagResults(res.data?.results || []);
+    } catch (e) {
+      console.error("Semantic search failed", e);
+    } finally {
+      setSearchingRag(false);
+    }
+  };
+
+  const handleScanGaps = async () => {
+    setScanningGaps(true);
+    try {
+      const res = await axios.get("http://127.0.0.1:8000/api/kb/gaps");
+      setGapReport(res.data);
+    } catch (e) {
+      console.error("Failed to scan KB gaps", e);
+    } finally {
+      setScanningGaps(false);
+    }
+  };
+
+  const handleSynthesizeAndPublish = async (gap: any) => {
+    setPublishingGap(gap.category);
+    try {
+      const ticketId = gap.sample_ticket_ids?.[0] || null;
+      await axios.post("http://127.0.0.1:8000/api/kb/synthesize", {
+        topic: gap.suggested_title,
+        ticket_id: ticketId,
+        auto_publish: true
+      });
+      await Promise.all([fetchDocs(), handleScanGaps()]);
+    } catch (e) {
+      console.error("Failed to synthesize KB article", e);
+    } finally {
+      setPublishingGap(null);
+    }
+  };
+
   const filteredDocs = docs.filter(d => 
     d.content.toLowerCase().includes(searchFilter.toLowerCase()) || 
     d.id.toLowerCase().includes(searchFilter.toLowerCase())
@@ -98,7 +153,7 @@ export default function KnowledgeBase() {
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: "0.5rem" }}>
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
           <button 
             className={`filter-pill ${activeTab === "file" ? "active" : ""}`}
             onClick={() => setActiveTab("file")}
@@ -111,10 +166,25 @@ export default function KnowledgeBase() {
           >
             Add FAQ Policy Text
           </button>
+          <button 
+            className={`filter-pill ${activeTab === "search" ? "active" : ""}`}
+            onClick={() => setActiveTab("search")}
+          >
+            🔍 Semantic RAG Tester
+          </button>
+          <button 
+            className={`filter-pill ${activeTab === "gaps" ? "active" : ""}`}
+            onClick={() => {
+              setActiveTab("gaps");
+              if (!gapReport) handleScanGaps();
+            }}
+          >
+            ✨ AI Gap Detector
+          </button>
         </div>
       </div>
 
-      {/* Input Form */}
+      {/* Input Form / RAG Tester / Gap Detector */}
       <div style={{
         background: "rgba(15, 23, 42, 0.6)",
         border: "1px solid rgba(255, 255, 255, 0.08)",
@@ -143,7 +213,7 @@ export default function KnowledgeBase() {
               </button>
             </div>
           </div>
-        ) : (
+        ) : activeTab === "text" ? (
           <div>
             <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "#cbd5e1", marginBottom: "0.5rem" }}>
               Insert Support FAQ / Policy Directive
@@ -163,6 +233,140 @@ export default function KnowledgeBase() {
             >
               <Plus size={16} /> {loading ? "Storing..." : "Add to Knowledge Base"}
             </button>
+          </div>
+        ) : activeTab === "search" ? (
+          <div>
+            <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "#cbd5e1", marginBottom: "0.5rem" }}>
+              Test Semantic Vector Retrieval &amp; Similarity Scoring
+            </div>
+            <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem" }}>
+              <input
+                type="text"
+                className="input"
+                placeholder="Ask a customer question (e.g. 'How do I get a refund for a duplicate charge?')"
+                value={ragQuery}
+                onChange={(e) => setRagQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSemanticSearch()}
+                style={{ flex: 1, margin: 0 }}
+              />
+              <button
+                className="btn btn-purple"
+                onClick={handleSemanticSearch}
+                disabled={searchingRag || !ragQuery.trim()}
+              >
+                <Search size={15} /> {searchingRag ? "Searching..." : "Test Retrieval"}
+              </button>
+            </div>
+
+            {ragResults.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+                {ragResults.map((r, i) => (
+                  <div key={i} style={{
+                    background: "rgba(139, 92, 246, 0.08)",
+                    border: "1px solid rgba(139, 92, 246, 0.25)",
+                    borderRadius: "8px",
+                    padding: "0.75rem 1rem"
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
+                      <span className="badge badge-purple" style={{ fontSize: "0.7rem" }}>{r.id}</span>
+                      <span style={{
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        color: r.similarity_score >= 60 ? "#34d399" : "#fbbf24"
+                      }}>
+                        {r.similarity_score}% Semantic Match (dist: {r.distance})
+                      </span>
+                    </div>
+                    <p style={{ fontSize: "0.84rem", color: "#e2e8f0", margin: 0, lineHeight: 1.45 }}>
+                      {r.content}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
+              <div>
+                <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  <Sparkles size={16} color="#c084fc" />
+                  AI Knowledge Coverage &amp; Gap Analyzer
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "#94a3b8" }}>
+                  Compares recent support tickets against ChromaDB embeddings to find undocumented issues
+                </div>
+              </div>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={handleScanGaps}
+                disabled={scanningGaps}
+              >
+                <RefreshCw size={14} className={scanningGaps ? "animate-spin" : ""} />
+                {scanningGaps ? "Scanning..." : "Rescan Tickets"}
+              </button>
+            </div>
+
+            {gapReport && (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1rem", background: "rgba(255,255,255,0.03)", padding: "0.75rem 1rem", borderRadius: "8px" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", marginBottom: "0.3rem" }}>
+                      <span style={{ color: "#cbd5e1" }}>KB Deflection Coverage ({gapReport.covered_tickets}/{gapReport.scanned_tickets} recent tickets)</span>
+                      <strong style={{ color: gapReport.kb_coverage_score >= 70 ? "#34d399" : "#fbbf24" }}>{gapReport.kb_coverage_score}%</strong>
+                    </div>
+                    <div style={{ height: 8, background: "rgba(255,255,255,0.1)", borderRadius: 4, overflow: "hidden" }}>
+                      <div style={{
+                        width: `${gapReport.kb_coverage_score}%`,
+                        height: "100%",
+                        background: gapReport.kb_coverage_score >= 70 ? "#10b981" : "#f59e0b"
+                      }} />
+                    </div>
+                  </div>
+                </div>
+
+                {gapReport.gaps && gapReport.gaps.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+                    {gapReport.gaps.map((gap: any, idx: number) => (
+                      <div key={idx} style={{
+                        background: "rgba(245, 158, 11, 0.08)",
+                        border: "1px solid rgba(245, 158, 11, 0.25)",
+                        borderRadius: "8px",
+                        padding: "0.75rem 1rem",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: "1rem",
+                        flexWrap: "wrap"
+                      }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.2rem" }}>
+                            <AlertTriangle size={14} color="#fbbf24" />
+                            <strong style={{ color: "#fff", fontSize: "0.86rem" }}>{gap.suggested_title}</strong>
+                            <span className="badge badge-warning" style={{ fontSize: "0.68rem" }}>{gap.ticket_count} uncovered tickets</span>
+                          </div>
+                          <div style={{ fontSize: "0.76rem", color: "#94a3b8" }}>
+                            Avg KB Match: {gap.avg_similarity}% &bull; Sample Ticket IDs: {gap.sample_ticket_ids.map((id: number) => `#${id}`).join(", ")}
+                          </div>
+                        </div>
+                        <button
+                          className="btn btn-purple btn-sm"
+                          onClick={() => handleSynthesizeAndPublish(gap)}
+                          disabled={publishingGap === gap.category}
+                        >
+                          <Sparkles size={13} />
+                          {publishingGap === gap.category ? "Publishing..." : "Synthesize & Publish to KB"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: "0.84rem", color: "#34d399", textAlign: "center", padding: "0.75rem" }}>
+                    ✔ All scanned tickets are well covered by existing Knowledge Base policies!
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

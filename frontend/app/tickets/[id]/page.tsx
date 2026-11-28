@@ -7,7 +7,7 @@ import {
   AlertTriangle, Clock, ArrowLeft, CheckCircle, Trash2, Send, 
   Sparkles, Bot, Copy, Check, Save, MessageSquare, Loader2, RefreshCw,
   User, ShieldCheck, HelpCircle, Flame, Smile, Frown, MessageCircle,
-  Users, History, Lock, Zap, Radio, Link2, Unlink, Building2, HeartHandshake
+  Users, History, Lock, Zap, Radio, Link2, Unlink, Building2, HeartHandshake, BookOpen
 } from "lucide-react";
 import Navbar from "../../components/Navbar";
 import AssigneeRoutingCard from "../../components/AssigneeRoutingCard";
@@ -79,6 +79,10 @@ export default function TicketDetail() {
   const [retentionMemo, setRetentionMemo] = useState<any>(null);
   const [generatingRetentionMemo, setGeneratingRetentionMemo] = useState(false);
 
+  // Promote to KB State
+  const [promotingToKB, setPromotingToKB] = useState(false);
+  const [kbPublishedInfo, setKbPublishedInfo] = useState<any>(null);
+
   useEffect(() => {
     if (id) {
       fetchTicketData();
@@ -107,6 +111,24 @@ export default function TicketDetail() {
       console.error("Failed to generate retention memo", e);
     } finally {
       setGeneratingRetentionMemo(false);
+    }
+  };
+
+  const handlePromoteToKB = async () => {
+    setPromotingToKB(true);
+    setKbPublishedInfo(null);
+    try {
+      const res = await axios.post("http://127.0.0.1:8000/api/kb/synthesize", {
+        ticket_id: Number(id),
+        auto_publish: true
+      });
+      setKbPublishedInfo(res.data);
+      setAuditRefreshTrigger(t => t + 1);
+    } catch (e) {
+      console.error("Failed to promote ticket to KB", e);
+      alert("Failed to synthesize KB article.");
+    } finally {
+      setPromotingToKB(false);
     }
   };
 
@@ -760,7 +782,17 @@ export default function TicketDetail() {
                   </p>
                 </div>
 
-                <div style={{ display: "flex", gap: "0.5rem" }}>
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <button 
+                    className="btn btn-secondary btn-sm" 
+                    onClick={handlePromoteToKB}
+                    disabled={promotingToKB}
+                    title="Synthesize a reusable Knowledge Base article from this ticket"
+                    style={{ background: "rgba(16, 185, 129, 0.16)", border: "1px solid rgba(16, 185, 129, 0.35)", color: "#6ee7b7", display: "flex", alignItems: "center", gap: 5 }}
+                  >
+                    <BookOpen size={14} color="#34d399" />
+                    <span>{promotingToKB ? "Publishing..." : "Promote to KB"}</span>
+                  </button>
                   <button 
                     className="btn btn-secondary btn-sm" 
                     onClick={() => setMacrosModalOpen(true)}
@@ -789,6 +821,33 @@ export default function TicketDetail() {
                   </button>
                 </div>
               </div>
+
+              {/* KB Published Confirmation Banner */}
+              {kbPublishedInfo && (
+                <div style={{
+                  background: "rgba(16, 185, 129, 0.12)",
+                  border: "1px solid rgba(16, 185, 129, 0.35)",
+                  borderRadius: "8px",
+                  padding: "0.65rem 0.9rem",
+                  marginBottom: "0.85rem",
+                  fontSize: "0.8rem",
+                  color: "#a7f3d0",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: "0.75rem"
+                }}>
+                  <div>
+                    <strong style={{ color: "#34d399" }}>✔ Published to RAG Knowledge Base:</strong> {kbPublishedInfo.title} <span style={{ opacity: 0.8 }}>({kbPublishedInfo.doc_id})</span>
+                  </div>
+                  <button
+                    onClick={() => setKbPublishedInfo(null)}
+                    style={{ background: "transparent", border: "none", color: "#6ee7b7", cursor: "pointer", fontSize: "0.75rem" }}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
 
               {/* Tone Quick Adjustment Pills */}
               <div style={{ marginBottom: "0.85rem" }}>

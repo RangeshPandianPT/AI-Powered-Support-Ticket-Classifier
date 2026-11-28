@@ -9,7 +9,7 @@ This platform automates the ingestion, classification, and drafting of responses
 * **Multi-Agent Workflow (LangGraph)**: Processes tickets through structured agents: Triage Agent ➡️ RAG Knowledge Retrieval ➡️ Response Drafter ➡️ Escalation Sentinel.
 * **Live Agent Execution Stepper**: Visualizes real-time execution steps, agent decisions, confidence scores, and retrieved policies in the UI.
 * **AI Ticket Classification & Triage**: Categorizes issues, routes to teams (IT, Sales, Logistics, Customer Success), and determines priority and emotional sentiment.
-* **RAG-Enhanced Knowledge Base**: Upload PDF or text policies to ChromaDB vector store; agent responses are automatically grounded in company guidelines.
+* **RAG-Enhanced Knowledge Base & AI Gap Detector**: Upload PDF or text policies to ChromaDB vector store; test semantic vector similarity scores, detect uncovered recurring ticket topics, and synthesize 1-click KB articles directly from resolved tickets.
 * **Multi-Turn Conversation Threads**: Track complete back-and-forth message histories between customers and support agents with delivery timestamps, message counts, and sentiment tracking.
 * **Customer Reply Simulation Engine**: Simulate realistic customer follow-up reactions using LLM personas (Auto Dynamic Reaction, Solved/Thankful, Still Failing/Escalating, Clarification Question, or Custom Inbound Message) to test full support lifecycles.
 * **SLA Breach Monitoring & Countdown Timers**: Dynamic priority-based SLA tracking (4h High, 12h Medium, 24h Low) with real-time remaining countdown badges and breach indicators.
